@@ -8,7 +8,7 @@ gpio.setMode(gpio.MODE_BCM);
 var OFF = true;
 var ON = false;
 
-var platform, Accessory, Service, Characteristic, CustomCharacteristic, UUIDGen, sensorData, zoneSensorMap;
+var platform, Accessory, Service, Characteristic, AirPressure, UUIDGen, sensorData, zoneSensorMap;
 
 
 zoneSensorMap={
@@ -32,31 +32,29 @@ sensorData={};
 
 var zonecount=0;
 
-function CustomCharacteristics(Characteristic) {
-  this.AirPressure = function() {
-    Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
-    this.setProps({
-      format: Characteristic.Formats.FLOAT,
-      unit: 'hectopascals',
-      minValue: 700,
-      maxValue: 1100,
-      minStep: 1,
-      perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
-    });
-    this.value = this.getDefaultValue();
-  };
-  this.AirPressure.prototype=Object.create(Characteristic.prototype);
-
-  return this;
-}
-
 module.exports = function(homebridge) {
   console.log("homebridge API version: " + homebridge.version);
   Accessory = homebridge.platformAccessory;
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
   UUIDGen = homebridge.hap.uuid;
-  CustomCharacteristic=CustomCharacteristics(Characteristic);
+  
+  AirPressure = Characteristic.VOCDensity;
+  /*function() {
+        Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
+        this.setProps({
+          format: Characteristic.Formats.FLOAT,
+          unit: 'hectopascals',
+          minValue: 700,
+          maxValue: 110000,
+          minStep: 1,
+          perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
+        });
+        this.value = this.getDefaultValue();
+  };
+  AirPressure.prototype=Object.create(Characteristic.prototype);
+  AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
+  */
   // registerPlatform(pluginName, platformName, constructor, dynamic), dynamic must be true
   homebridge.registerPlatform("homebridge-multizone-thermostat", "MultiZonePlatform", MultiZonePlatform, true);
 };
@@ -157,11 +155,16 @@ MultiZonePlatform.prototype.getAccessoryForSensor=function(sensorName){
 
 MultiZonePlatform.prototype.updateSensorData = function(sensorName, temperature, battery, pressure, humidity){
   //this is the global copy of all sensors for debugging
-  var sdata=sensorData[sensorName] || {};
+  var sdata=sensorData[sensorName];
+  if(sdata==undefined){
+      sensorData[sensorName]={};
+      sdata=sensorData[sensorName];
+    }
   sdata['temp'] = temperature || sdata['temp'];
   sdata['batt'] = battery || sdata['batt'];
   sdata['press'] = pressure || sdata['press'];
   sdata['humid'] = humidity || sdata['humid'];
+  sdata['time'] = Date.now();
   //sensorData[sensorName]={'temp':temperature, 'batt': battery, 'press':pressure, 'humid':humidity};
   //this.log(sensorName + " : " + JSON.stringify(sdata));
   var accessory=this.getAccessoryForSensor(sensorName);
@@ -177,10 +180,13 @@ MultiZonePlatform.prototype.updateSensorData = function(sensorName, temperature,
     sdata['batt'] = battery || sdata['batt'];
     sdata['press'] = pressure || sdata['press'];
     sdata['humid'] = humidity || sdata['humid'];
+    sdata['time'] = Date.now();
   }else{
     var zone=this.getZoneForSensor(sensorName);
-    this.log("no accessory for sensor",sensorName,"pending create for zone",zone);
-    this.addAccessory("Zone" + zone + " Thermostat", zone);
+    if(zone){
+      this.log("Found: Sensor",sensorName,"Add Zone"+zone);
+      this.addAccessory("Zone" + zone + " Thermostat", zone);
+    }
   }
 };
 
@@ -195,26 +201,20 @@ MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
 // Update current value.
 MultiZonePlatform.prototype.configureAccessory = function(accessory) {
   this.log(accessory.displayName,"Configure Accessory");
-  
   var platform = this;
   accessory.log=this.log;
-  // Set the accessory to reachable if plugin can currently process the accessory,
-  // otherwise set to false and update the reachability later by invoking 
-  // accessory.updateReachability()
-  accessory.reachable = true;
-  
-  accessory.on('identify', function(paired, callback) {
-    platform.log(accessory.displayName, "Identify!!!");
-    callback();
-  });
-  
   var zone=accessory.displayName.substr(accessory.displayName.indexOf("Zone")+4,1);
   this.log("Zone",zone);
   accessory.zone=zone;
   accessory.zoneSensorMap=zoneSensorMap;
-
-  //extend this service
+  //make this a Service.Thermostat and add handlers
   MakeThermostat(accessory);
+  //if(this.api)this.api.registerPlatformAccessories("homebridge-multizone-thermostat", "MultiZonePlatform", [accessory]);
+  
+  // Set the accessory to reachable if plugin can currently process the accessory,
+  // otherwise set to false and update the reachability later by invoking 
+  // accessory.updateReachability()
+  accessory.reachable = true;
   this.accessories.push(accessory);
 };
 
@@ -297,45 +297,25 @@ MultiZonePlatform.prototype.configurationRequestHandler = function(context, requ
   // Invoke callback to update setup UI
   callback(respDict);
 };
-
+var pendingAccessories=[];
 // Sample function to show how developer can add accessory dynamically from outside event
 MultiZonePlatform.prototype.addAccessory = function(accessoryName, zone) {
-  this.log("Add Accessory");
-  var platform = this;
-  var uuid;
-
-  uuid = UUIDGen.generate(accessoryName);
-
-  var newAccessory = new Accessory(accessoryName, uuid);
-  newAccessory.on('identify', function(paired, callback) {
-    platform.log(newAccessory.displayName, "Identify!!!");
-    callback();
-  });
-  // Plugin can save context on accessory to help restore accessory in configureAccessory()
-  // newAccessory.context.something = "Something"
-  newAccessory.log=this.log;
-  newAccessory.zone=zone;
-  newAccessory.zoneSensorMap=zoneSensorMap;
-  this.currentTemperature = 21;
-  this.currentRelativeHumidity = 50;
-  this.targetTemperature = 21;
-  this.maxTemperature = 35;
-  this.minTemperature = 0;
-  this.heatingThresholdTemperature = 18;
-  this.coolingThresholdTemperature = 24;
-  this.isFanRunning = false;
-  
-  this.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
-  this.currentHeatingCoolingState = Characteristic.CurrentHeatingCoolingState.OFF;
-  this.targetHeatingCoolingState = Characteristic.TargetHeatingCoolingState.OFF;
-
-  
-  //make this a service
-  MakeThermostat(newAccessory);
-
-
-  this.accessories.push(newAccessory);
-  this.api.registerPlatformAccessories("homebridge-multizone-thermostat", "MultiZonePlatform", [newAccessory]);
+  if(pendingAccessories.includes(accessoryName)){
+    this.log("Pending",accessoryName);
+    return;
+  }
+  pendingAccessories.push(accessoryName);
+  this.log("Add Accessory",accessoryName);
+  var accessory = new Accessory(accessoryName, UUIDGen.generate(accessoryName));
+  accessory.zone=zone;
+  accessory.zoneSensorMap=zoneSensorMap;
+  accessory.log=this.log;
+  //make this a Service.Thermostat and add handlers
+  MakeThermostat(accessory);
+  if(this.api)this.api.registerPlatformAccessories("homebridge-multizone-thermostat", "MultiZonePlatform", [accessory]);
+  accessory.reachable = true;
+  this.accessories.push(accessory);
+  pendingAccessories=pendingAccessories.filter(x => x!=accessoryName);
 };
 
 MultiZonePlatform.prototype.updateAccessoriesReachability = function() {
@@ -355,42 +335,91 @@ MultiZonePlatform.prototype.removeAccessory = function() {
 };
 
 function MakeThermostat(accessory){
+    // Plugin can save context on accessory to help restore accessory in configureAccessory()
+  // accessory.context.something = "Something"
     accessory.sensorData={};
     
-    accessory.updateSystem=function(){
-      accessory.log("updating...");
-    }
-    
-    accessory.getCurrentTemperature=function(){
+    accessory.averageSensorValue=function(sensorType){
       var sum=0;
       var count=0;
       for(var sensorName in accessory.sensorData){
-        sum+=Number(accessory.sensorData[sensorName]['temp']);
-        count++;
+        var val=accessory.sensorData[sensorName][sensorType];
+        if(val){
+          sum+=Number(val);
+          count++;
+        }
       }
       return count>0 ? sum/count : 0;
+    };  
+    accessory.getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.Manufacturer, "mcmspark")
+        .setCharacteristic(Characteristic.Model, 'Zone Thermostat')
+        .setCharacteristic(Characteristic.SerialNumber, '00x000x0000x')
+        .setCharacteristic(Characteristic.FirmwareRevision, 'unknown');
+
+    accessory.on('identify', function(paired, callback) {
+      platform.log(accessory.displayName, "Identify!!!");
+      callback();
+    });
+    
+    accessory.updateSystem=function(){
+      accessory.log("updating...");  
+    };
+    /*
+    accessory.getCurrentTemperature=function(){
+      return accessory.averageSensorValue('temp');
+    };
+    accessory.getCurrentPressure=function(){
+      return accessory.averageSensorValue('press');
     };
     accessory.getCurrentRelativeHumidity=function(){
-      var sum=0;
-      var count=0;
-      for(var sensorName in accessory.sensorData){
-        sum+=Number(accessory.sensorData[sensorName]['humid']);
-        count++;
-      }
-      return count>0 ? sum/count : 0;
+      return accessory.averageSensorValue('humid');
     };
+    */
+    accessory.batteryService==accessory.getService(Service.BatteryService);
+    if(accessory.batteryService==undefined){
+      accessory.batteryService=accessory.addService(Service.BatteryService, accessory.displayName);
+    }
+    accessory.batteryService
+     .getCharacteristic(Characteristic.BatteryLevel)
+     .on('get', callback => {
+       callback(null, accessory.averageSensorValue('batt')*33);
+     });
+    accessory.batteryService
+      .getCharacteristic(Characteristic.StatusLowBattery)
+      .on('get', callback => {
+        callback(null, accessory.averageSensorValue('batt')<2.5);
+      });
     
-    accessory.thermostatService=accessory.getService(accessory.displayName);
+    accessory.thermostatService=accessory.getService(Service.Thermostat);
     if(accessory.thermostatService==undefined){
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
-      accessory.log("no service found added",accessory.thermostatService.displayName);
-    }    
+      //accessory.log("no service found added -??",accessory.thermostatService.displayName);
+    } 
+    accessory.thermostatService.addCharacteristic(AirPressure);
     
+    accessory.minTemperature=0;
+    accessory.maxTemperature=44;
+    accessory.targetTemperature = 21;
+    accessory.heatingThresholdTemperature = 18;
+    accessory.coolingThresholdTemperature = 24;
+    accessory.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+    accessory.currentHeatingCoolingState = Characteristic.CurrentHeatingCoolingState.OFF;
+    accessory.targetHeatingCoolingState = Characteristic.TargetHeatingCoolingState.OFF;
+
+    /*accessory.thermostatService
+      .setCharacteristic(Characteristic.TargetTemperature, 21)
+      .setCharacteristic(Characteristic.HeatingThresholdTemperature, 18)
+      .setCharacteristic(Characteristic.CoolingThresholdTemperature, 24)
+      .setCharacteristic(Characteristic.TemperatureDisplayUnits, Characteristic.TemperatureDisplayUnits.FAHRENHEIT)
+      .setCharacteristic(Characteristic.CurrentHeatingCoolingState, Characteristic.CurrentHeatingCoolingState.OFF)
+      .setCharacteristic(Characteristic.TargetHeatingCoolingState, Characteristic.TargetHeatingCoolingState.OFF);
+    */
     // Off, Heat, Cool
     accessory.thermostatService
       .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
       .on('get', callback => {
-        accessory.log('CurrentHeatingCoolingState:', accessory.currentHeatingCoolingState);
+        //accessory.log('CurrentHeatingCoolingState:', accessory.currentHeatingCoolingState);
         callback(null, accessory.currentHeatingCoolingState);
       })
       .on('set', (value, callback) => {
@@ -409,7 +438,7 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.TargetHeatingCoolingState)
       .on('get', callback => {
-        accessory.log('TargetHeatingCoolingState:', accessory.targetHeatingCoolingState);
+        //accessory.log('TargetHeatingCoolingState:', accessory.targetHeatingCoolingState);
         callback(null, accessory.targetHeatingCoolingState);
       })
       .on('set', (value, callback) => {
@@ -428,8 +457,8 @@ function MakeThermostat(accessory){
         minStep: 0.1
       })
       .on('get', callback => {
-        accessory.log('CurrentTemperature:', accessory.getCurrentTemperature());
-        callback(null, accessory.getCurrentTemperature());
+        //accessory.log('CurrentTemperature:', accessory.getCurrentTemperature());
+        callback(null, accessory.averageSensorValue('temp'));
       })
       .on('set', (value, callback) => {
         accessory.updateSystem();
@@ -445,7 +474,7 @@ function MakeThermostat(accessory){
         minStep: 0.1
       })
       .on('get', callback => {
-        accessory.log('TargetTemperature:', accessory.targetTemperature);
+        //accessory.log('TargetTemperature:', accessory.targetTemperature);
         callback(null, accessory.targetTemperature);
       })
       .on('set', (value, callback) => {
@@ -459,7 +488,7 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.TemperatureDisplayUnits)
       .on('get', callback => {
-        accessory.log('TemperatureDisplayUnits:', accessory.temperatureDisplayUnits);
+        //accessory.log('TemperatureDisplayUnits:', accessory.displayName, accessory.temperatureDisplayUnits);
         callback(null, accessory.temperatureDisplayUnits);
       })
       .on('set', (value, callback) => {
@@ -472,18 +501,23 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.CurrentRelativeHumidity)
       .on('get', callback => {
-        accessory.log('CurrentRelativeHumidity:', accessory.getCurrentRelativeHumidity());
-        callback(null, accessory.getCurrentRelativeHumidity());
+        //accessory.log('CurrentRelativeHumidity:', accessory.getCurrentRelativeHumidity());
+        callback(null, accessory.averageSensorValue('humid'));
       });
-/*      
+      
     // GetPressure
     accessory.thermostatService
-      .getCharacteristic(CustomCharacteristic.AirPressure)
+      .getCharacteristic(AirPressure)
+      .setProps({
+        unit: 'hectopascals',
+        minValue: 700,
+        maxValue: 110000,
+      })
       .on('get', callback => {
-        accessory.log('CurrentAirPressure:', accessory.currentPressure);
-        callback(null, accessory.currentPressure);
+        accessory.log('CurrentAirPressure:', accessory.averageSensorValue('press'));
+        callback(null, accessory.getCurrentPressure());
       });
-*/
+
     // Auto max temperature
     accessory.thermostatService
       .getCharacteristic(Characteristic.CoolingThresholdTemperature)
@@ -493,7 +527,7 @@ function MakeThermostat(accessory){
         minStep: 0.1
       })
       .on('get', callback => {
-        accessory.log('CoolingThresholdTemperature:', accessory.coolingThresholdTemperature);
+        //accessory.log('CoolingThresholdTemperature:', accessory.coolingThresholdTemperature);
         callback(null, accessory.coolingThresholdTemperature);
       })
       .on('set', (value, callback) => {
@@ -511,7 +545,7 @@ function MakeThermostat(accessory){
         minStep: 0.1
       })
       .on('get', callback => {
-        accessory.log('HeatingThresholdTemperature:', accessory.heatingThresholdTemperature);
+        //accessory.log('HeatingThresholdTemperature:', accessory.heatingThresholdTemperature);
         callback(null, accessory.heatingThresholdTemperature);
       })
       .on('set', (value, callback) => {
@@ -523,7 +557,7 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.Name)
       .on('get', callback => {
-        callback(null, accessory.name);
+        callback(null, accessory.displayName);
       });
 
 }
