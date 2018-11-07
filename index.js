@@ -316,6 +316,19 @@ MultiZonePlatform.prototype.addAccessory = function(accessoryName, zone) {
   newAccessory.log=this.log;
   newAccessory.zone=zone;
   newAccessory.zoneSensorMap=zoneSensorMap;
+  this.currentTemperature = 21;
+  this.currentRelativeHumidity = 50;
+  this.targetTemperature = 21;
+  this.maxTemperature = 35;
+  this.minTemperature = 0;
+  this.heatingThresholdTemperature = 18;
+  this.coolingThresholdTemperature = 24;
+  this.isFanRunning = false;
+  
+  this.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+  this.currentHeatingCoolingState = Characteristic.CurrentHeatingCoolingState.OFF;
+  this.targetHeatingCoolingState = Characteristic.TargetHeatingCoolingState.OFF;
+
   
   //make this a service
   MakeThermostat(newAccessory);
@@ -343,6 +356,11 @@ MultiZonePlatform.prototype.removeAccessory = function() {
 
 function MakeThermostat(accessory){
     accessory.sensorData={};
+    
+    accessory.updateSystem=function(){
+      accessory.log("updating...");
+    }
+    
     accessory.getCurrentTemperature=function(){
       var sum=0;
       var count=0;
@@ -350,9 +368,18 @@ function MakeThermostat(accessory){
         sum+=Number(accessory.sensorData[sensorName]['temp']);
         count++;
       }
-      //accessory.log(accessory.zone, JSON.stringify(accessory.sensorData));
       return count>0 ? sum/count : 0;
     };
+    accessory.getCurrentRelativeHumidity=function(){
+      var sum=0;
+      var count=0;
+      for(var sensorName in accessory.sensorData){
+        sum+=Number(accessory.sensorData[sensorName]['humid']);
+        count++;
+      }
+      return count>0 ? sum/count : 0;
+    };
+    
     accessory.thermostatService=accessory.getService(accessory.displayName);
     if(accessory.thermostatService==undefined){
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
@@ -445,10 +472,10 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.CurrentRelativeHumidity)
       .on('get', callback => {
-        accessory.log('CurrentRelativeHumidity:', accessory.currentRelativeHumidity);
-        callback(null, accessory.currentRelativeHumidity);
+        accessory.log('CurrentRelativeHumidity:', accessory.getCurrentRelativeHumidity());
+        callback(null, accessory.getCurrentRelativeHumidity());
       });
-      
+/*      
     // GetPressure
     accessory.thermostatService
       .getCharacteristic(CustomCharacteristic.AirPressure)
@@ -456,7 +483,7 @@ function MakeThermostat(accessory){
         accessory.log('CurrentAirPressure:', accessory.currentPressure);
         callback(null, accessory.currentPressure);
       });
-
+*/
     // Auto max temperature
     accessory.thermostatService
       .getCharacteristic(Characteristic.CoolingThresholdTemperature)
