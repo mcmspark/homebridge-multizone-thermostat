@@ -1,13 +1,14 @@
 var http = require('http');
 var gpio = require('rpi-gpio');
 var BME280 = require('node-adafruit-bme280');
+var SerialPort = require('serialport');
 
 gpio.setMode(gpio.MODE_BCM);
 
 var OFF = true;
 var ON = false;
 
-var Accessory, Service, Characteristic, CustomCharacteristic, UUIDGen, sensorData, zoneSensorMap;
+var platform, Accessory, Service, Characteristic, CustomCharacteristic, UUIDGen, sensorData, zoneSensorMap;
 
 
 zoneSensorMap={
@@ -27,16 +28,7 @@ zoneSensorMap={
       }
 };
 
-sensorData={
-  'AA':{'temp':0,'batt':0},
-	'AB':{'temp':0,'batt':0},
-	'AC':{'temp':0,'batt':0},
-	'AD':{'temp':0,'batt':0},
-	'AE':{'temp':0,'batt':0},
-	'AF':{'temp':0,'batt':0},
-	'BM':{'temp':0,'press':0,'humid':0},
-	'AH':{'temp':0,'batt':0}
-};
+sensorData={};
 
 var zonecount=0;
 
@@ -74,7 +66,7 @@ module.exports = function(homebridge) {
 // api may be null if launched from old homebridge version
 function MultiZonePlatform(log, config, api) {
   log("MultiZonePlatform Init");
-  var platform = this;
+  platform = this;
   this.log = log;
   this.config = config;
   
@@ -86,9 +78,10 @@ function MultiZonePlatform(log, config, api) {
     if (request.url === "/temp") {
       response.statusCode = 200;
       response.setHeader('Content-Type', 'text/json');
-      response.end(JSON.stringify(temperatureData));
+      response.end(JSON.stringify(sensorData));
     }
   }.bind(this));
+
 
   this.requestServer.listen(3000, function() {
     platform.log("Server Listening...");
@@ -106,70 +99,120 @@ function MultiZonePlatform(log, config, api) {
       }.bind(this));
   }
   // add accessories for each zone
-  var zone=1;
-  this.addAccessory("Zone" + zone + " Thermostat", zone);
+  //var zone=1;
+  //this.addAccessory("Zone" + zone + " Thermostat", zone);
   this.startSensorLoops();
 }
 
 MultiZonePlatform.prototype.startSensorLoops=function(){
-  this.sensorInterval=this.setInterval(this.readTemperatureFromI2C,this.sensorCheckMilliseconds);
+  this.sensorInterval=setInterval(this.readTemperatureFromI2C,this.sensorCheckMilliseconds);
+  var port = new SerialPort('/dev/ttyAMA0', {
+      baudRate: 9600
+  });
+  port.msgbuff="";
+  port.on('error',function(err){
+      console.write("cannot open port - " + err);
+  });
+  port.on('open', function() {
+    console.log('port open');
+  });
+  port.on('data', function(data){
+//    console.log(data.toString());
+    this.msgbuff+=data.toString();
+    while(this.msgbuff.length>11 && this.msgbuff.length-this.msgbuff.indexOf("a")>11){
+      var pos=this.msgbuff.indexOf("a")
+      var msg=this.msgbuff.substr(pos,12);
+      this.msgbuff=this.msgbuff.substr(13);
+      var deviceid=msg.substr(1,2);
+//      console.log(deviceid + "  - " + msg + " " + msgbuff.length);
+      var type=msg.substr(3,4);
+      if(type=="TEMP"){platform.updateSensorData(deviceid,Number(msg.substr(7)),null,null,null);}
+      if(type=="BATT"){platform.updateSensorData(deviceid,null,Number(msg.substr(7,4)),null,null);}
+    }
+  });
 };
-
-MultiZonePlatform.prototype.getAccessoryForSensor=function(sensorName){
-  for(var accessory in this.accessories){
-    if(zoneSensorMap[accessory.zone][sensorName])return accessory;
+MultiZonePlatform.prototype.getZoneForSensor=function(sensorName){
+  for(var z in zoneSensorMap){
+    if(zoneSensorMap[z][sensorName]){
+      //this.log("found");
+      return z;
+    }
   }  
+  //this.log("NOT found");
   return undefined;
 };
 
-MultiZonePlatform.prototype.updateSensorData=function(sensorName, temperature, battery, pressure, humidity){
+MultiZonePlatform.prototype.getAccessoryForSensor=function(sensorName){
+  for(var i in this.accessories){
+    var accessory=this.accessories[i];
+    //this.log("Searching " + accessory.displayName + " in zone " + accessory.zone + " for " + sensorName + " = " + JSON.stringify(zoneSensorMap[accessory.zone][sensorName]));
+    if(accessory.zone && zoneSensorMap[accessory.zone] && zoneSensorMap[accessory.zone][sensorName]){
+      //this.log("found");
+      return accessory;
+    }
+  }  
+  //this.log("NOT found");
+  return undefined;
+};
+
+MultiZonePlatform.prototype.updateSensorData = function(sensorName, temperature, battery, pressure, humidity){
   //this is the global copy of all sensors for debugging
-  sensorData[sensorName]={'temp':temperature-1.1111, 'batt': battery, 'press':pressure, 'humid':humidity};
-  
+  var sdata=sensorData[sensorName] || {};
+  sdata['temp'] = temperature || sdata['temp'];
+  sdata['batt'] = battery || sdata['batt'];
+  sdata['press'] = pressure || sdata['press'];
+  sdata['humid'] = humidity || sdata['humid'];
+  //sensorData[sensorName]={'temp':temperature, 'batt': battery, 'press':pressure, 'humid':humidity};
+  //this.log(sensorName + " : " + JSON.stringify(sdata));
   var accessory=this.getAccessoryForSensor(sensorName);
   if(accessory){
-    accessory.sensorData[sensorName]={'temp':temperature-1.1111, 'batt': battery, 'press':pressure, 'humid':humidity};
-    accessory.currentTemperature = temperature;
-    accessory.currentPressure=pressure;
-    accessory.currentRelativeHumidity = humidity;
-    accessory.thermostatService.setCharacteristic(Characteristic.CurrentTemperature, accessory.getCurrentTemperature());
-    if(pressure)accessory.thermostatService.setCharacteristic(CustomCharacteristic.AirPressure,accessory.currentPressure);
-    if(humidity)accessory.thermostatService.setCharacteristic(Characteristic.CurrentRelativeHumidity, accessory.currentRelativeHumidity);
+    sdata=accessory.sensorData[sensorName];
+    if(sdata==undefined){
+      if(accessory.sensorData==undefined)accessory.sensorData={};
+      accessory.sensorData[sensorName]={};
+    }
+    sdata=accessory.sensorData[sensorName];
+    //this.log("update sendor data", sensorName, JSON.stringify(sdata));
+    sdata['temp'] = temperature || sdata['temp'];
+    sdata['batt'] = battery || sdata['batt'];
+    sdata['press'] = pressure || sdata['press'];
+    sdata['humid'] = humidity || sdata['humid'];
+  }else{
+    var zone=this.getZoneForSensor(sensorName);
+    this.log("no accessory for sensor",sensorName,"pending create for zone",zone);
+    this.addAccessory("Zone" + zone + " Thermostat", zone);
   }
 };
 
-MultiZonePlatform.prototype.readTemperatureFromI2C =function() {
+MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
     BME280.probe((temperature, pressure, humidity) => {
-        sensorData['BM']={'temp':temperature-1.1111, 'press':pressure, 'humid':humidity};
-        this.updateSensorData('BM', temperature-1.1111, null, pressure, humidity);
+        platform.updateSensorData('BM', temperature-1.1111, null, pressure, humidity);
     });
 };
+
 // Function invoked when homebridge tries to restore cached accessory.
 // Developer can configure accessory at here (like setup event handler).
 // Update current value.
 MultiZonePlatform.prototype.configureAccessory = function(accessory) {
-  this.log(accessory.displayName, "Configure Accessory");
+  this.log(accessory.displayName,"Configure Accessory");
+  
   var platform = this;
-
+  accessory.log=this.log;
   // Set the accessory to reachable if plugin can currently process the accessory,
   // otherwise set to false and update the reachability later by invoking 
   // accessory.updateReachability()
   accessory.reachable = true;
-
+  
   accessory.on('identify', function(paired, callback) {
     platform.log(accessory.displayName, "Identify!!!");
     callback();
   });
-/*
-  if (accessory.getService(Service.Lightbulb)) {
-    accessory.getService(Service.Lightbulb)
-    .getCharacteristic(Characteristic.On)
-    .on('set', function(value, callback) {
-      platform.log(accessory.displayName, "Light -> " + value);
-      callback();
-    });
-  }
-*/
+  
+  var zone=accessory.displayName.substr(accessory.displayName.indexOf("Zone")+4,1);
+  this.log("Zone",zone);
+  accessory.zone=zone;
+  accessory.zoneSensorMap=zoneSensorMap;
+
   //extend this service
   MakeThermostat(accessory);
   this.accessories.push(accessory);
@@ -249,7 +292,7 @@ MultiZonePlatform.prototype.configurationRequestHandler = function(context, requ
   // }
 
   // Plugin can set context to allow it track setup process
-  context.ts = "Hello";
+  context.ts = "MultiZoneContext";
 
   // Invoke callback to update setup UI
   callback(respDict);
@@ -270,14 +313,13 @@ MultiZonePlatform.prototype.addAccessory = function(accessoryName, zone) {
   });
   // Plugin can save context on accessory to help restore accessory in configureAccessory()
   // newAccessory.context.something = "Something"
-  
-  // Make sure you provided a name for service, otherwise it may not visible in some HomeKit apps
-  newAccessory.thermostatService = newAccessory.addService(Service.Thermostat, accessoryName);
   newAccessory.log=this.log;
   newAccessory.zone=zone;
   newAccessory.zoneSensorMap=zoneSensorMap;
-  //extend this service
+  
+  //make this a service
   MakeThermostat(newAccessory);
+
 
   this.accessories.push(newAccessory);
   this.api.registerPlatformAccessories("homebridge-multizone-thermostat", "MultiZonePlatform", [newAccessory]);
@@ -303,13 +345,19 @@ function MakeThermostat(accessory){
     accessory.sensorData={};
     accessory.getCurrentTemperature=function(){
       var sum=0;
-      var count=1;
-      for(var sensor in accessory.sensorData){
-        sum+=Number(sensor['temp']);
+      var count=0;
+      for(var sensorName in accessory.sensorData){
+        sum+=Number(accessory.sensorData[sensorName]['temp']);
         count++;
       }
-      return sum/count;
+      //accessory.log(accessory.zone, JSON.stringify(accessory.sensorData));
+      return count>0 ? sum/count : 0;
     };
+    accessory.thermostatService=accessory.getService(accessory.displayName);
+    if(accessory.thermostatService==undefined){
+      accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
+      accessory.log("no service found added",accessory.thermostatService.displayName);
+    }    
     
     // Off, Heat, Cool
     accessory.thermostatService
@@ -450,4 +498,5 @@ function MakeThermostat(accessory){
       .on('get', callback => {
         callback(null, accessory.name);
       });
+
 }
