@@ -1,3 +1,3 @@
 # homebridge-multizone-thermostat
 
-this aint right yet
+It works but I am currently testing
