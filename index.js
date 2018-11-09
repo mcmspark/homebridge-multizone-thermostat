@@ -8,7 +8,7 @@ gpio.setMode(gpio.MODE_BCM);
 var OFF = true;
 var ON = false;
 
-var platform, Accessory, Service, Characteristic, AirPressure, UUIDGen, sensorData, zoneSensorMap;
+var platform, Accessory, Service, Characteristic, AirPressure, UUIDGen, sensorData, zoneSensorMap, zonePinMap;
 
 
 zoneSensorMap={
@@ -27,6 +27,7 @@ zoneSensorMap={
         'AD' : {'location':'addition','source':'serial'}
       }
 };
+zonePinMap=[0,17,27,22];
 
 sensorData={};
 
@@ -39,8 +40,9 @@ module.exports = function(homebridge) {
   Characteristic = homebridge.hap.Characteristic;
   UUIDGen = homebridge.hap.uuid;
   
-  AirPressure = Characteristic.VOCDensity;
-  /*function() {
+  for(var i=1;i<zonePinMap.length;i++)gpio.setup(zonePinMap[i], gpio.DIR_HIGH);
+  
+  AirPressure = function() {
         Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
         this.setProps({
           format: Characteristic.Formats.FLOAT,
@@ -54,7 +56,7 @@ module.exports = function(homebridge) {
   };
   AirPressure.prototype=Object.create(Characteristic.prototype);
   AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
-  */
+  
   // registerPlatform(pluginName, platformName, constructor, dynamic), dynamic must be true
   homebridge.registerPlatform("homebridge-multizone-thermostat", "MultiZonePlatform", MultiZonePlatform, true);
 };
@@ -204,9 +206,14 @@ MultiZonePlatform.prototype.configureAccessory = function(accessory) {
   var platform = this;
   accessory.log=this.log;
   var zone=accessory.displayName.substr(accessory.displayName.indexOf("Zone")+4,1);
-  this.log("Zone",zone);
   accessory.zone=zone;
   accessory.zoneSensorMap=zoneSensorMap;
+  /*
+  this.log("This accessory has",accessory.services.length,"services");
+  this.log("Service.AccessoryInformation",accessory.getService(Service.AccessoryInformation) instanceof Service);
+  this.log("Service.BatteryService",accessory.getService(Service.BatteryService) instanceof Service);
+  this.log("Service.Thermostat",accessory.getService(Service.Thermostat) instanceof Service);
+  */
   //make this a Service.Thermostat and add handlers
   MakeThermostat(accessory);
   //if(this.api)this.api.registerPlatformAccessories("homebridge-multizone-thermostat", "MultiZonePlatform", [accessory]);
@@ -336,7 +343,7 @@ MultiZonePlatform.prototype.removeAccessory = function() {
 
 function MakeThermostat(accessory){
     // Plugin can save context on accessory to help restore accessory in configureAccessory()
-  // accessory.context.something = "Something"
+    // accessory.context.something = "Something"
     accessory.sensorData={};
     
     accessory.averageSensorValue=function(sensorType){
@@ -351,7 +358,7 @@ function MakeThermostat(accessory){
       }
       return count>0 ? sum/count : 0;
     };  
-    accessory.getService(Service.AccessoryInformation)
+    var svc=accessory.getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, "mcmspark")
         .setCharacteristic(Characteristic.Model, 'Zone Thermostat')
         .setCharacteristic(Characteristic.SerialNumber, '00x000x0000x')
@@ -362,22 +369,108 @@ function MakeThermostat(accessory){
       callback();
     });
     
+
+    accessory.currentlyRunning=function(){
+      return accessory.systemStateName(accessory.currentHeatingCoolingState);
+    }
+  
+    accessory.shouldTurnOnHeating=function(){
+      return (accessory.targetHeatingCoolingState === Characteristic.TargetHeatingCoolingState.HEAT && accessory.averageSensorValue('temp') < accessory.targetTemperature)
+        || (accessory.targetHeatingCoolingState === Characteristic.TargetHeatingCoolingState.AUTO && accessory.averageSensorValue('temp') < accessory.heatingThresholdTemperature);
+    }
+  
+    accessory.shouldTurnOnCooling=function(){
+      return (accessory.targetHeatingCoolingState === Characteristic.TargetHeatingCoolingState.COOL && accessory.averageSensorValue('temp') > accessory.targetTemperature)
+        || (accessory.targetHeatingCoolingState === Characteristic.TargetHeatingCoolingState.AUTO && accessory.averageSensorValue('temp') > accessory.coolingThresholdTemperature);
+    }
+  
+    accessory.systemStateName=function(heatingCoolingState) {
+      if (heatingCoolingState === Characteristic.CurrentHeatingCoolingState.HEAT) {
+        return 'Heat';
+      } else if (heatingCoolingState === Characteristic.CurrentHeatingCoolingState.COOL) {
+        return 'Cool';
+      } else {
+        return 'Off';
+      }
+    }
+  
+    accessory.clearTurnOnInstruction=function(){
+      accessory.log('CLEARING Turn On instruction');
+      clearTimeout(accessory.startSystemTimer);
+      accessory.startSystemTimer = null;
+    }
+  
+    accessory.turnOnSystem=function(systemToTurnOn) {
+      if (accessory.currentHeatingCoolingState === Characteristic.CurrentHeatingCoolingState.OFF) {
+        if (!accessory.startSystemTimer) {
+          accessory.log(`STARTING ${accessory.systemStateName(systemToTurnOn)} in ${accessory.startDelay / 1000} second(s)`);
+          accessory.startSystemTimer = setTimeout(() => {
+            accessory.log(`START ${accessory.systemStateName(systemToTurnOn)}`);
+            gpio.write(zonePinMap[accessory.zone], ON);
+            accessory.thermostatService.setCharacteristic(Characteristic.CurrentHeatingCoolingState, systemToTurnOn);
+          }, accessory.startDelay);
+        } else {
+          accessory.log(`STARTING ${accessory.systemStateName(systemToTurnOn)} soon...`);
+        }
+      } else if (accessory.currentHeatingCoolingState !== systemToTurnOn) {
+        accessory.turnOffSystem();
+      }
+    }
+
+    accessory.lastCurrentHeatingCoolingStateChangeTime=0;
+    accessory.timeSinceLastHeatingCoolingStateChange=function(){
+      return new Date() - accessory.lastCurrentHeatingCoolingStateChangeTime;
+    }
+  
+    accessory.turnOffSystem=function(){
+      if (!accessory.stopSystemTimer) {
+        accessory.log(`STOP ${accessory.currentlyRunning} | Blower will turn off in ${accessory.blowerTurnOffTime / 1000} second(s)`);
+        gpio.write(zonePinMap[accessory.zone], OFF);
+        accessory.stopSystemTimer = setTimeout(() => {
+          accessory.thermostatService.setCharacteristic(Characteristic.CurrentHeatingCoolingState, Characteristic.CurrentHeatingCoolingState.OFF);
+        }, accessory.blowerTurnOffTime);
+      } else {
+        accessory.log(`INFO ${accessory.currentlyRunning} is stopped. Blower will turn off soon...`);
+      }
+    }
+    
     accessory.updateSystem=function(){
       accessory.log("updating...");  
+      if (accessory.timeSinceLastHeatingCoolingStateChange() < accessory.minimumOnOffTime) {
+        const waitTime = accessory.minimumOnOffTime - accessory.timeSinceLastHeatingCoolingStateChange();
+        accessory.log(`INFO Need to wait ${waitTime / 1000} second(s) before state changes.`);
+        return;
+      }
+  
+      if (accessory.currentHeatingCoolingState === Characteristic.CurrentHeatingCoolingState.OFF
+          && accessory.targetHeatingCoolingState !== Characteristic.TargetHeatingCoolingState.OFF) {
+        if (accessory.shouldTurnOnHeating()) {
+          accessory.turnOnSystem(Characteristic.CurrentHeatingCoolingState.HEAT);
+        } else if (accessory.shouldTurnOnCooling()) {
+          accessory.turnOnSystem(Characteristic.CurrentHeatingCoolingState.COOL);
+        } else if (accessory.startSystemTimer) {
+          accessory.clearTurnOnInstruction();
+        }
+      } else if (accessory.currentHeatingCoolingState !== Characteristic.CurrentHeatingCoolingState.OFF
+          && accessory.targetHeatingCoolingState === Characteristic.TargetHeatingCoolingState.OFF) {
+        accessory.turnOffSystem();
+      } else if (accessory.currentHeatingCoolingState !== Characteristic.CurrentHeatingCoolingState.OFF
+                && accessory.targetHeatingCoolingState !== Characteristic.TargetHeatingCoolingState.OFF) {
+        if (accessory.shouldTurnOnHeating()) {
+          accessory.turnOnSystem(Characteristic.CurrentHeatingCoolingState.HEAT);
+        } else if (accessory.shouldTurnOnCooling()) {
+          accessory.turnOnSystem(Characteristic.CurrentHeatingCoolingState.COOL);
+        } else {
+          accessory.turnOffSystem();
+        }
+      } else if (accessory.startSystemTimer) {
+        accessory.clearTurnOnInstruction();
+      }
     };
-    /*
-    accessory.getCurrentTemperature=function(){
-      return accessory.averageSensorValue('temp');
-    };
-    accessory.getCurrentPressure=function(){
-      return accessory.averageSensorValue('press');
-    };
-    accessory.getCurrentRelativeHumidity=function(){
-      return accessory.averageSensorValue('humid');
-    };
-    */
-    accessory.batteryService==accessory.getService(Service.BatteryService);
+    
+    accessory.batteryService=accessory.getService(Service.BatteryService);
     if(accessory.batteryService==undefined){
+      accessory.log("add Battery Service");
       accessory.batteryService=accessory.addService(Service.BatteryService, accessory.displayName);
     }
     accessory.batteryService
@@ -393,19 +486,29 @@ function MakeThermostat(accessory){
     
     accessory.thermostatService=accessory.getService(Service.Thermostat);
     if(accessory.thermostatService==undefined){
+      accessory.log("add thermostat service");
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
       //accessory.log("no service found added -??",accessory.thermostatService.displayName);
     } 
-    accessory.thermostatService.addCharacteristic(AirPressure);
+    if(accessory.thermostatService.getCharacteristic(AirPressure)==undefined)
+      accessory.thermostatService.addCharacteristic(AirPressure);
     
-    accessory.minTemperature=0;
-    accessory.maxTemperature=44;
-    accessory.targetTemperature = 21;
-    accessory.heatingThresholdTemperature = 18;
-    accessory.coolingThresholdTemperature = 24;
-    accessory.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
-    accessory.currentHeatingCoolingState = Characteristic.CurrentHeatingCoolingState.OFF;
-    accessory.targetHeatingCoolingState = Characteristic.TargetHeatingCoolingState.OFF;
+    accessory.minimumOnOffTime = accessory.minimumOnOffTime || 120000; // In milliseconds
+    accessory.startDelay = accessory.startDelay || 10000; // In milliseconds
+    accessory.temperatureCheckInterval = accessory.temperatureCheckInterval || 10000; // In milliseconds
+    
+    accessory.minTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).minValue || 0;
+    accessory.maxTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).maxValue || 44;
+    accessory.targetTemperature = accessory.thermostatService.getCharacteristic(Characteristic.TargetHeatingCoolingState).value || 21;
+    accessory.heatingThresholdTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).value  || 18;
+    accessory.coolingThresholdTemperature = accessory.thermostatService.getCharacteristic(Characteristic.CoolingThresholdTemperature).value  || 24;
+    accessory.temperatureDisplayUnits = accessory.thermostatService.getCharacteristic(Characteristic.TemperatureDisplayUnits).value || Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+    accessory.currentHeatingCoolingState = accessory.thermostatService.getCharacteristic(Characteristic.CurrentHeatingCoolingState).value || Characteristic.CurrentHeatingCoolingState.OFF;
+    accessory.targetHeatingCoolingState = accessory.thermostatService.getCharacteristic(Characteristic.TargetHeatingCoolingState).value || Characteristic.TargetHeatingCoolingState.OFF;
+    
+    
+
+    //setInterval(() => this.readTemperatureFromSensor(), this.temperatureCheckInterval);
 
     /*accessory.thermostatService
       .setCharacteristic(Characteristic.TargetTemperature, 21)
@@ -508,11 +611,6 @@ function MakeThermostat(accessory){
     // GetPressure
     accessory.thermostatService
       .getCharacteristic(AirPressure)
-      .setProps({
-        unit: 'hectopascals',
-        minValue: 700,
-        maxValue: 110000,
-      })
       .on('get', callback => {
         accessory.log('CurrentAirPressure:', accessory.averageSensorValue('press'));
         callback(null, accessory.getCurrentPressure());
