@@ -70,7 +70,7 @@ function MultiZonePlatform(log, config, api) {
   this.log = log;
   this.config = config;
   
-  this.sensorCheckMilliseconds=10000;
+  this.sensorCheckMilliseconds=60000;
   
   this.accessories = [];
 
@@ -106,7 +106,7 @@ function MultiZonePlatform(log, config, api) {
 
 MultiZonePlatform.prototype.startSensorLoops=function(){
   this.sensorInterval=setInterval(this.readTemperatureFromI2C,this.sensorCheckMilliseconds);
-  var port = new SerialPort('/dev/ttyAMA0', {
+  var port = new SerialPort('/dev/serial0', {
       baudRate: 9600
   });
   port.msgbuff="";
@@ -183,6 +183,7 @@ MultiZonePlatform.prototype.updateSensorData = function(sensorName, temperature,
     sdata['press'] = pressure || sdata['press'];
     sdata['humid'] = humidity || sdata['humid'];
     sdata['time'] = Date.now();
+    accessory.readSensorData();
   }else{
     var zone=this.getZoneForSensor(sensorName);
     if(zone){
@@ -193,9 +194,11 @@ MultiZonePlatform.prototype.updateSensorData = function(sensorName, temperature,
 };
 
 MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
+  try{
     BME280.probe((temperature, pressure, humidity) => {
         platform.updateSensorData('BM', temperature-1.1111, null, pressure, humidity);
     });
+  }catch(err){this.log(err);}
 };
 
 // Function invoked when homebridge tries to restore cached accessory.
@@ -345,6 +348,11 @@ function MakeThermostat(accessory){
     // Plugin can save context on accessory to help restore accessory in configureAccessory()
     // accessory.context.something = "Something"
     accessory.sensorData={};
+    accessory.readSensorData=function(){
+    //  accessory.log("readSensorData",
+      accessory.batteryService.getCharacteristic(Characteristic.BatteryLevel).getValue(null);
+      accessory.thermostatService.getCharacteristic(Characteristic.CurrentTemperature).getValue(null);
+    }
     
     accessory.averageSensorValue=function(sensorType){
       var sum=0;
@@ -476,12 +484,15 @@ function MakeThermostat(accessory){
     accessory.batteryService
      .getCharacteristic(Characteristic.BatteryLevel)
      .on('get', callback => {
-       callback(null, accessory.averageSensorValue('batt')*33);
+       this.value=accessory.averageSensorValue('batt')*33;
+       //accessory.log('BatteryLevel:', this.value);
+       callback(null, this.value);
      });
     accessory.batteryService
       .getCharacteristic(Characteristic.StatusLowBattery)
       .on('get', callback => {
-        callback(null, accessory.averageSensorValue('batt')<2.5);
+        this.value=(accessory.averageSensorValue('batt')<2.5);
+        callback(null, this.value);
       });
     
     accessory.thermostatService=accessory.getService(Service.Thermostat);
@@ -490,8 +501,10 @@ function MakeThermostat(accessory){
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
       //accessory.log("no service found added -??",accessory.thermostatService.displayName);
     } 
-    if(accessory.thermostatService.getCharacteristic(AirPressure)==undefined)
-      accessory.thermostatService.addCharacteristic(AirPressure);
+    
+    // This causes a warning
+    //if(accessory.thermostatService.getCharacteristic(AirPressure)==undefined)
+    //  accessory.thermostatService.addCharacteristic(AirPressure);
     
     accessory.minimumOnOffTime = accessory.minimumOnOffTime || 120000; // In milliseconds
     accessory.startDelay = accessory.startDelay || 10000; // In milliseconds
@@ -499,7 +512,7 @@ function MakeThermostat(accessory){
     
     accessory.minTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).minValue || 0;
     accessory.maxTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).maxValue || 44;
-    accessory.targetTemperature = accessory.thermostatService.getCharacteristic(Characteristic.TargetHeatingCoolingState).value || 21;
+    accessory.targetTemperature = accessory.thermostatService.getCharacteristic(Characteristic.TargetTemperature).value || 21;
     accessory.heatingThresholdTemperature = accessory.thermostatService.getCharacteristic(Characteristic.HeatingThresholdTemperature).value  || 18;
     accessory.coolingThresholdTemperature = accessory.thermostatService.getCharacteristic(Characteristic.CoolingThresholdTemperature).value  || 24;
     accessory.temperatureDisplayUnits = accessory.thermostatService.getCharacteristic(Characteristic.TemperatureDisplayUnits).value || Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
@@ -561,10 +574,12 @@ function MakeThermostat(accessory){
         minStep: 0.1
       })
       .on('get', callback => {
-        //accessory.log('CurrentTemperature:', accessory.getCurrentTemperature());
-        callback(null, accessory.averageSensorValue('temp'));
+        this.value=accessory.averageSensorValue('temp');
+        //accessory.log('CurrentTemperature:', this.value);
+        callback(null, this.value);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         accessory.updateSystem();
         callback(null);
       });
@@ -607,8 +622,9 @@ function MakeThermostat(accessory){
     accessory.thermostatService
       .getCharacteristic(Characteristic.CurrentRelativeHumidity)
       .on('get', callback => {
+        this.value=accessory.averageSensorValue('humid');
         //accessory.log('CurrentRelativeHumidity:', accessory.getCurrentRelativeHumidity());
-        callback(null, accessory.averageSensorValue('humid'));
+        callback(null, this.value);
       });
       
     // GetPressure
