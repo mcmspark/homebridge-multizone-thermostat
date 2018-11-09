@@ -470,7 +470,7 @@ function MakeThermostat(accessory){
     
     accessory.batteryService=accessory.getService(Service.BatteryService);
     if(accessory.batteryService==undefined){
-      accessory.log("add Battery Service");
+      //accessory.log("    add Battery Service");
       accessory.batteryService=accessory.addService(Service.BatteryService, accessory.displayName);
     }
     accessory.batteryService
@@ -486,7 +486,7 @@ function MakeThermostat(accessory){
     
     accessory.thermostatService=accessory.getService(Service.Thermostat);
     if(accessory.thermostatService==undefined){
-      accessory.log("add thermostat service");
+      //accessory.log("    add Thermostat Service");
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
       //accessory.log("no service found added -??",accessory.thermostatService.displayName);
     } 
@@ -526,6 +526,7 @@ function MakeThermostat(accessory){
         callback(null, accessory.currentHeatingCoolingState);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         accessory.log('SET CurrentHeatingCoolingState from', accessory.currentHeatingCoolingState, 'to', value);
         accessory.currentHeatingCoolingState = value;
         accessory.lastCurrentHeatingCoolingStateChangeTime = new Date();
@@ -581,6 +582,7 @@ function MakeThermostat(accessory){
         callback(null, accessory.targetTemperature);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         accessory.log('SET TargetTemperature from', accessory.targetTemperature, 'to', value);
         accessory.targetTemperature = value;
         accessory.updateSystem();
@@ -595,6 +597,7 @@ function MakeThermostat(accessory){
         callback(null, accessory.temperatureDisplayUnits);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         accessory.log('SET TemperatureDisplayUnits from', accessory.temperatureDisplayUnits, 'to', value);
         accessory.temperatureDisplayUnits = value;
         callback(null);
