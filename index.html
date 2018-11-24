@@ -1,0 +1,162 @@
+<html>
+	<head>
+		<style>
+			body{
+				font-family: "Helvetica";
+				background-color: black;
+				color: white;
+			}
+			h3{
+				text-align: center;
+			}
+			div.main{
+				width:100%;
+			}
+			div.zone{
+				width: 30%;
+				background-color: black;
+				color: white;
+				float: left;
+				padding-right: 20px;
+			}
+			div.stat{
+				color: white;
+				display: block;
+			}
+			span.lbl{
+				font-size: 8pt;
+			}
+			div.tempOff{
+				color: white;
+				float: left;
+				width:49%;
+				height:150px;
+				text-align: center;
+				vertical-align: middle;
+				font-size: 60pt;
+				font-weight:normal;
+				line-height: 150px;
+				
+			}
+			div.tempRun{
+				color: orange;
+				float: left;
+				width:49%;
+				height:150px;
+				text-align: center;
+				vertical-align: middle;
+				font-size: 60pt;
+				font-weight: bold;
+				line-height: 150px;
+				
+			}
+			div.setpt{
+				line-height: 50px;
+				text-align: center;
+				font-size: 30pt;
+				vertical-align: middle;
+				width:100%;
+				height:50px;
+			}
+			div.ctrl{
+				vertical-align: top;
+				float: left;
+				width: 49%;
+				height:150px;
+				
+			}
+			.button {
+				width:100%;
+				height:50px;
+				padding: 1px 1px;
+				font-size: 32px;
+				font-weight: bold;
+				cursor: pointer;
+				text-align: center;
+				text-decoration: none;
+				outline: none;
+				color: black;
+				background-color: lightgray;
+				border: none;
+				border-radius: 5px;
+				box-shadow: 0 2px gray;
+			}
+			
+			.button:hover {background-color: #3e8e41}
+			
+			.button:active {
+			  background-color: red;
+			  box-shadow: 0 0px gray;
+			  transform: translateY(2px);
+			}
+		</style>
+	<script src="jquery.min.js"></script>
+	</head>
+	<body>
+		<div id="main" class="main">
+			LOADING...
+		</div>
+		<br/><br/>
+		<div id="data" class="stat"></div>
+			<br/>
+		<a href=".">reload</a>	
+		<script>
+			var refreshTimer;
+			var dataCache="";
+			function buttonClick(e){
+				var zone=e.split('.')[0];
+				var action=e.split('.')[1];
+				var setPoint=70;
+				console.log(zone);
+				for(var z in dataCache){
+					if( zone==dataCache[z].name ){
+						//console.log("found");
+						setPoint=dataCache[z].setPoint + (action=='+'?1:-1);
+						dataCache[z].setPoint=setPoint;
+						break;
+					}
+				}
+				displayData(dataCache);
+				$.ajax({
+	            	type: 'PUT',
+	            	url: '/set/'+zone+'/'+setPoint,						
+	            	error: function(err) {
+	                	$("#data").text("Error");
+						console.log(JSON.stringify(err));
+	            	}
+	        	});
+			}
+			function displayData(data){
+				dataCache=data;
+				$("#data").text("OK");
+				$("#main").html("");
+				for(var z in data){
+					var zone=data[z].name;
+					var currentTemp=data[z].currentTemp;
+					var setPoint=data[z].setPoint;
+					var running=data[z].running;
+					$("#main").append('<div id="'+zone+'" class="zone"><h3>'+zone+'</h3><div class="'+(running?'tempRun':'tempOff')+'">'+currentTemp+'</div><div class="ctrl"><button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button><div class="setpt"><span class="set">'+setPoint+'</span><span class="lbl">set</span></div><button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button></div></div>');
+				}
+			}
+			function startInterval(){
+				refreshTimer=setInterval(			
+			     function(){
+					//dataCache=JSON.parse('[{"name":"zone1","currentTemp":68,"setPoint":70,"running":true},{"name":"zone2","currentTemp":69,"setPoint":71,"running":true},{"name":"zone3","currentTemp":71,"setPoint":70,"running":false}]');
+					//displayData(dataCache);
+					//clearInterval(refreshTimer);
+					//refreshTimer=null;
+					//return;
+			        $.ajax({
+			            type: 'GET',
+			            url: '/status',						
+			            error: function(err) {
+			                $("#data").text("Error");
+							console.log(JSON.stringify(err));
+			            }
+			        }).done(displayData);
+			    },10000);
+			}
+			$(startInterval);
+		</script>
+	</body>
+</html>

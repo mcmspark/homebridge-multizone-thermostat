@@ -1,0 +1,82 @@
+{
+    "bridge": {
+	    "name": "Homebridge",
+	    "username": "CC:22:3D:E3:CE:30",
+	    "port": 51826,
+	    "pin": "031-45-154"
+    },
+    "description": "",
+    "accessories": [
+    ],
+    "platforms": [
+            {
+                "platform" : "MultiZonePlatform",
+                "name" : "MultiZone Platform",
+				"zones" : {
+                    "1" : {
+                        "relayPin" : 17,
+                        "sensors" : [
+                            {
+                                "id" : "AE",
+                                "location" : "snug",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            },
+                            {
+                                "id" : "AF",
+                                "location" : "living",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            },
+                            {
+                                "id" : "AH",
+                                "location" : "gavin",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            },
+                            {
+                                "id" : "BM",
+                                "location" : "pi",
+                                "source" : "I2C",
+                                "extras" : "humid,press"
+                            }
+                        ]
+                    },
+                    "2" : {
+                        "relayPin" : 27,
+                        "sensors" : [
+                            {
+                                "id" : "AA",
+                                "location" : "master",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            },
+                            {
+                                "id" : "AB",
+                                "location" : "tess",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            },
+                            {
+                                "id" : "AC",
+                                "location" : "kate",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            }
+                        ]
+                    },
+                    "3" : {
+                        "relayPin" : 22,
+                        "sensors" : [
+                            {
+                                "id" : "AD",
+                                "location" : "addition",
+                                "source" : "serial",
+                                "extras" : "batt"
+                            }
+                        ]
+                    }
+                }
+            }
+    ]
+}
