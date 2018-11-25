@@ -103,7 +103,11 @@
 		<script>
 			var refreshTimer;
 			var dataCache="";
+			var sendUpdates=false;
 			function buttonClick(e){
+				clearInterval(refreshTimer);
+				refreshTimer=null;
+				sendUpdates=true;
 				var zone=e.split('.')[0];
 				var action=e.split('.')[1];
 				var setPoint=70;
@@ -117,14 +121,7 @@
 					}
 				}
 				displayData(dataCache);
-				$.ajax({
-	            	type: 'PUT',
-	            	url: '/set/'+zone+'/'+setPoint,						
-	            	error: function(err) {
-	                	$("#data").text("Error");
-						console.log(JSON.stringify(err));
-	            	}
-	        	});
+				startInterval();
 			}
 			function displayData(data){
 				dataCache=data;
@@ -138,23 +135,45 @@
 					$("#main").append('<div id="'+zone+'" class="zone"><h3>'+zone+'</h3><div class="'+(running?'tempRun':'tempOff')+'">'+currentTemp+'</div><div class="ctrl"><button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button><div class="setpt"><span class="set">'+setPoint+'</span><span class="lbl">set</span></div><button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button></div></div>');
 				}
 			}
+			function getData(){
+				$.ajax({
+		            type: 'GET',
+		            url: '/status',						
+		            error: function(err) {
+		                $("#data").text("Error on GET");
+						console.log(JSON.stringify(err));
+		            }
+		        }).done(function(data){
+					if(data)
+					if(sendUpdates){
+						sendUpdates=false;
+						for(var z in data){
+							var zone=data[z].name;
+							var setPoint=data[z].setPoint;
+							for(var x in dataCache){
+								if(dataCache[x].name==zone && dataCache[x].setPoint!=setPoint){
+									setPoint=dataCache[x].setPoint;
+									$.ajax({
+						            	type: 'PUT',
+						            	url: '/set/'+zone+'/'+setPoint,						
+						            	error: function(err) {
+						                	$("#data").text("Error on PUT");
+											console.log(JSON.stringify(err));
+						            	}
+						        	});
+								}
+							}
+						}
+						getData();
+					}
+					else{
+						displayData(data);
+					}
+				});
+			}
+			
 			function startInterval(){
-				refreshTimer=setInterval(			
-			     function(){
-					//dataCache=JSON.parse('[{"name":"zone1","currentTemp":68,"setPoint":70,"running":true},{"name":"zone2","currentTemp":69,"setPoint":71,"running":true},{"name":"zone3","currentTemp":71,"setPoint":70,"running":false}]');
-					//displayData(dataCache);
-					//clearInterval(refreshTimer);
-					//refreshTimer=null;
-					//return;
-			        $.ajax({
-			            type: 'GET',
-			            url: '/status',						
-			            error: function(err) {
-			                $("#data").text("Error");
-							console.log(JSON.stringify(err));
-			            }
-			        }).done(displayData);
-			    },10000);
+				refreshTimer=setInterval(getData,10000);
 			}
 			$(startInterval);
 		</script>

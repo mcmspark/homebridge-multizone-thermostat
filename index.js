@@ -116,6 +116,7 @@ function MultiZonePlatform(log, config, api) {
   
   this.zones = config.zones || zones;
   this.sensorCheckMilliseconds = config.sensorCheckMilliseconds || 60000;
+  this.temperatureDisplayUnits = config.temperatureDisplayUnits || 1;
   this.minOnOffTime = config.minOnOffTime || 300000;
   this.startDelay = config.startDelay || 10000;
   this.serverPort = config.serverPort || 3000;
@@ -169,7 +170,6 @@ function MultiZonePlatform(log, config, api) {
   }
 }
 
-
 MultiZonePlatform.prototype.returnFileContents=function(url, response){
    var filePath=path.resolve(__dirname,url.substr(1));
    fs.readFile(filePath, function (err, data) {
@@ -193,8 +193,8 @@ MultiZonePlatform.prototype.getStatus=function(){
     var service=accessory.thermostatService;
     if(service){
       var currentTemp = service.getValue(Characteristic.CurrentTemperature);
-      var targetTemp = service.getValue(Characteristic.TargetTemperature);
-      if(service.getValue(Characteristic.TemperatureDisplayUnits)==Characteristic.TemperatureDisplayUnits.FAHRENHEIT){
+      var targetTemp = service.targetTemperature;
+      if(service.temperatureDisplayUnits==Characteristic.TemperatureDisplayUnits.FAHRENHEIT){
         currentTemp=currentTemp*9/5+32;
         targetTemp=targetTemp*9/5+32;
       }
@@ -219,7 +219,7 @@ MultiZonePlatform.prototype.setTemperature=function(zone,temp){
     var service=accessory.thermostatService;
     if(accessory.displayName==zone && service){
       platform.log("set zone", zone, "to", temp);
-      if(service.getValue(Characteristic.TemperatureDisplayUnits)==Characteristic.TemperatureDisplayUnits.FAHRENHEIT){
+      if(service.temperatureDisplayUnits==Characteristic.TemperatureDisplayUnits.FAHRENHEIT){
         temp=(temp-32)*5/9;
       }
       if(temp<=service.maxTemperature && temp>=service.minTemperature){
@@ -590,6 +590,7 @@ MultiZonePlatform.prototype.setThermostatCharacteristics=function(service){
         callback(null, service.targetHeatingCoolingState);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         platform.log('SET TargetHeatingCoolingState from', service.targetHeatingCoolingState, 'to', value, service.displayName);
         service.targetHeatingCoolingState = value;
         service.updateSystem();
@@ -691,6 +692,7 @@ MultiZonePlatform.prototype.setThermostatCharacteristics=function(service){
         callback(null, service.coolingThresholdTemperature);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         platform.log('SET CoolingThresholdTemperature from', service.coolingThresholdTemperature, 'to', value, service.displayName);
         service.coolingThresholdTemperature = value;
         callback(null);
@@ -709,6 +711,7 @@ MultiZonePlatform.prototype.setThermostatCharacteristics=function(service){
         callback(null, service.heatingThresholdTemperature);
       })
       .on('set', (value, callback) => {
+        this.value=value;
         platform.log('SET HeatingThresholdTemperature from', service.heatingThresholdTemperature, 'to', value, service.displayName);
         service.heatingThresholdTemperature = value;
         callback(null);
@@ -722,8 +725,8 @@ MultiZonePlatform.prototype.setThermostatCharacteristics=function(service){
 };
 
 MultiZonePlatform.prototype.setThermostatDefaults=function(service){
-  service.targetTemperature = service.getValue(Characteristic.TargetTemperature)>10?service.getValue(Characteristic.TargetTemperature): 21;
-  service.temperatureDisplayUnits = service.getValue(Characteristic.TemperatureDisplayUnits) || Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+  service.targetTemperature = service.getValue(Characteristic.TargetTemperature)>12?service.getValue(Characteristic.TargetTemperature): 21;
+  service.temperatureDisplayUnits = platform.temperatureDisplayUnits;
   service.currentHeatingCoolingState = Characteristic.CurrentHeatingCoolingState.OFF;
   service.targetHeatingCoolingState = service.getValue(Characteristic.TargetHeatingCoolingState) || Characteristic.TargetHeatingCoolingState.OFF;
   
