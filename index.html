@@ -1,113 +1,34 @@
 <html>
 	<head>
-		<style>
-			body{
-				font-family: "Helvetica";
-				background-color: black;
-				color: white;
-			}
-			h3{
-				text-align: center;
-			}
-			div.main{
-				width:100%;
-			}
-			div.zone{
-				width: 30%;
-				background-color: black;
-				color: white;
-				float: left;
-				padding-right: 20px;
-			}
-			div.stat{
-				color: white;
-				display: block;
-			}
-			span.lbl{
-				font-size: 8pt;
-			}
-			div.tempOff{
-				color: white;
-				float: left;
-				width:49%;
-				height:150px;
-				text-align: center;
-				vertical-align: middle;
-				font-size: 60pt;
-				font-weight:normal;
-				line-height: 150px;
-				
-			}
-			div.tempRun{
-				color: orange;
-				float: left;
-				width:49%;
-				height:150px;
-				text-align: center;
-				vertical-align: middle;
-				font-size: 60pt;
-				font-weight: bold;
-				line-height: 150px;
-				
-			}
-			div.setpt{
-				line-height: 50px;
-				text-align: center;
-				font-size: 30pt;
-				vertical-align: middle;
-				width:100%;
-				height:50px;
-			}
-			div.ctrl{
-				vertical-align: top;
-				float: left;
-				width: 49%;
-				height:150px;
-				
-			}
-			.button {
-				width:100%;
-				height:50px;
-				padding: 1px 1px;
-				font-size: 32px;
-				font-weight: bold;
-				cursor: pointer;
-				text-align: center;
-				text-decoration: none;
-				outline: none;
-				color: black;
-				background-color: lightgray;
-				border: none;
-				border-radius: 5px;
-				box-shadow: 0 2px gray;
-			}
-			
-			.button:hover {background-color: #3e8e41}
-			
-			.button:active {
-			  background-color: red;
-			  box-shadow: 0 0px gray;
-			  transform: translateY(2px);
-			}
-		</style>
-	<script src="jquery.min.js"></script>
+		<link rel="stylesheet" type="text/css" href="index.css">
+		<script src="jquery.min.js"></script>
 	</head>
 	<body>
 		<div id="main" class="main">
 			LOADING...
 		</div>
-		<br/><br/>
+		<br></br>
 		<div id="data" class="stat"></div>
-			<br/>
+		<br/>
 		<a href=".">reload</a>	
 		<script>
 			var refreshTimer;
 			var dataCache="";
 			var sendUpdates=false;
+			var currentRefreshInterval=0;
+			// flow is
+			// click
+			// stop intervals
+			// update data cache and disply the update
+			// pend a put of the update with a 3 sec timer
+			// when timer fires
+			// post the update
+			// clear the post flag
+			// get fresh data
+			// reset the timer to 10 sec
 			function buttonClick(e){
 				clearInterval(refreshTimer);
 				refreshTimer=null;
-				sendUpdates=true;
 				var zone=e.split('.')[0];
 				var action=e.split('.')[1];
 				var setPoint=70;
@@ -120,6 +41,7 @@
 						break;
 					}
 				}
+				sendUpdates=true;
 				displayData(dataCache);
 				startInterval();
 			}
@@ -132,48 +54,66 @@
 					var currentTemp=data[z].currentTemp;
 					var setPoint=data[z].setPoint;
 					var running=data[z].running;
-					$("#main").append('<div id="'+zone+'" class="zone"><h3>'+zone+'</h3><div class="'+(running?'tempRun':'tempOff')+'">'+currentTemp+'</div><div class="ctrl"><button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button><div class="setpt"><span class="set">'+setPoint+'</span><span class="lbl">set</span></div><button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button></div></div>');
+					var currentReads="";
+					for(var r in data[z].currentReads){
+						currentReads+=data[z].currentReads[r].location + " = " + data[z].currentReads[r].temp+"<br/>";
+					}
+					$("#main").append(
+						'<div id="'+zone+'" class="zone">'+
+							'<div class="h3">'+zone+'</div>'+
+							'<div class="'+(running?'tempRun':'tempOff')+'">'+currentTemp+'</div>'+
+							'<div class="ctrl">'+
+								'<button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button>'+
+								'<div class="setpt"><span class="set">'+setPoint+'</span><span class="lbl">set</span></div>'+
+								'<button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button>'+
+							'</div>'+
+							'<div class="readings">'+currentReads+'</div>'+
+						'</div>');
 				}
 			}
-			function getData(){
-				$.ajax({
-		            type: 'GET',
-		            url: '/status',						
-		            error: function(err) {
-		                $("#data").text("Error on GET");
-						console.log(JSON.stringify(err));
-		            }
-		        }).done(function(data){
-					if(data)
-					if(sendUpdates){
-						sendUpdates=false;
-						for(var z in data){
-							var zone=data[z].name;
-							var setPoint=data[z].setPoint;
-							for(var x in dataCache){
-								if(dataCache[x].name==zone && dataCache[x].setPoint!=setPoint){
-									setPoint=dataCache[x].setPoint;
-									$.ajax({
-						            	type: 'PUT',
-						            	url: '/set/'+zone+'/'+setPoint,						
-						            	error: function(err) {
-						                	$("#data").text("Error on PUT");
-											console.log(JSON.stringify(err));
-						            	}
-						        	});
-								}
-							}
-						}
-						getData();
+			function moveData(){
+				if(sendUpdates){
+					sendUpdates=false;
+					for(var z in dataCache){
+						var zone=dataCache[z].name;
+						var setPoint=dataCache[z].setPoint;
+						// need to push only changes
+						console.log("set "+ zone+ " = " + setPoint);
+						$.ajax({
+			            	type: 'PUT',
+			            	url: '/set/'+zone+'/'+setPoint,						
+			            	error: function(err) {
+			                	$("#data").text("Error on PUT");
+								console.log(JSON.stringify(err));
+			            	}
+			        	});
 					}
-					else{
-						displayData(data);
+					startInterval();
+				}
+				else{
+					console.log("get");
+					$.ajax({
+			            type: 'GET',
+			            url: '/status',						
+			            error: function(err) {
+			                $("#data").text("Error on GET");
+							console.log(JSON.stringify(err));
+			            }
+			        }).done(function(data){
+						if(data)displayData(data);	
+					});
+					if(currentRefreshInterval<15000){
+						startInterval(15000);
 					}
-				});
+				}
 			}
 			
-			function startInterval(){
-				refreshTimer=setInterval(getData,10000);
+			function startInterval(timeout){
+				if(refreshTimer)clearInterval(refreshTimer);
+				refreshTimer=null;
+				currentRefreshInterval=( Number(timeout)>3000 )?Number(timeout):3000;
+				console.log("Wait "+currentRefreshInterval);
+				refreshTimer=setInterval(moveData,currentRefreshInterval);
 			}
 			$(startInterval);
 		</script>

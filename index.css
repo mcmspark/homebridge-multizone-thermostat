@@ -1,0 +1,100 @@
+body{
+	font-family: "Helvetica";
+	background-color: black;
+	color: white;
+}
+div.h3{
+	width: 100%;
+	height: 50px;
+	line-height: 50px;
+	text-align: center;
+}
+div.main{
+	width:480px;
+	height:320px;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+div.zone{
+	width: 32%;
+	height:280px;
+	background-color: black;
+	color: white;
+	float: left;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+div.tempOff{
+	color: white;
+	float: left;
+	width:47%;
+	height:150px;
+	text-align: center;
+	vertical-align: middle;
+	font-size: 40pt;
+	font-weight:normal;
+	line-height: 150px;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+div.tempRun{
+	color: orange;
+	float: left;
+	width:48%;
+	height:150px;
+	text-align: center;
+	vertical-align: middle;
+	font-size: 40pt;
+	font-weight: bold;
+	line-height: 150px;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+div.ctrl{
+	vertical-align: top;
+	float: left;
+	width: 48%;
+	height:150px;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+div.setpt{
+	line-height: 50px;
+	text-align: center;
+	font-size: 30pt;
+	vertical-align: middle;
+	width:100%;
+	height:50px;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+
+span.lbl{
+	font-size: 8pt;
+}
+.button {
+	width:100%;
+	height:50px;
+	padding: 1px 1px;
+	font-size: 32px;
+	font-weight: bold;
+	cursor: pointer;
+	text-align: center;
+	text-decoration: none;
+	outline: none;
+	color: black;
+	background-color: lightgray;
+	border: none;
+	border-radius: 5px;
+	box-shadow: 0 2px gray;
+}
+div.stat{
+	color: white;
+}
+.button:hover {background-color: #3e8e41}
+
+.button:active {
+  background-color: red;
+  box-shadow: 0 0px gray;
+  transform: translateY(2px);
+}

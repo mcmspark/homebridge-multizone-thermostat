@@ -12,6 +12,13 @@
             {
                 "platform" : "MultiZonePlatform",
                 "name" : "MultiZone Platform",
+                "sensorCheckMilliseconds" : 60000,
+                "temperatureDisplayUnits" : 1,
+                "minOnOffTime" : 60000,
+                "startDelay" : 10000,
+                "serverPort" : 3000,
+                "serialPort" : "/dev/serial0",
+                "serialCfg" : { "baudRate" : 9600 },
 				"zones" : {
                     "1" : {
                         "relayPin" : 17,
