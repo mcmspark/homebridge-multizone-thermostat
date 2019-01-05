@@ -10,28 +10,28 @@ div.h3{
 	text-align: center;
 }
 div.main{
-	width:480px;
-	height:320px;
-	padding: 0px 0px 0px 0px;
+	width:100%;
+	padding: 0px 0px 0px 20px;
 	margin: 0px 0px 0px 0px;
 }
 div.zone{
 	width: 32%;
-	height:280px;
+	
 	background-color: black;
 	color: white;
 	float: left;
 	padding: 0px 0px 0px 0px;
 	margin: 0px 0px 0px 0px;
+	
 }
 div.tempOff{
 	color: white;
 	float: left;
-	width:47%;
+	width:54%;
 	height:150px;
 	text-align: center;
 	vertical-align: middle;
-	font-size: 40pt;
+	font-size: 64pt;
 	font-weight:normal;
 	line-height: 150px;
 	padding: 0px 0px 0px 0px;
@@ -40,11 +40,11 @@ div.tempOff{
 div.tempRun{
 	color: orange;
 	float: left;
-	width:48%;
+	width:54%;
 	height:150px;
 	text-align: center;
 	vertical-align: middle;
-	font-size: 40pt;
+	font-size: 64pt;
 	font-weight: bold;
 	line-height: 150px;
 	padding: 0px 0px 0px 0px;
@@ -53,7 +53,7 @@ div.tempRun{
 div.ctrl{
 	vertical-align: top;
 	float: left;
-	width: 48%;
+	width: 40%;
 	height:150px;
 	padding: 0px 0px 0px 0px;
 	margin: 0px 0px 0px 0px;
@@ -89,6 +89,8 @@ span.lbl{
 	box-shadow: 0 2px gray;
 }
 div.stat{
+	width:100%;
+	float:left;
 	color: white;
 }
 .button:hover {background-color: #3e8e41}
@@ -97,4 +99,23 @@ div.stat{
   background-color: red;
   box-shadow: 0 0px gray;
   transform: translateY(2px);
+}
+div.readings {
+	width:90%;
+	float:left;
+	font-size: 18pt;
+	padding: 10px 10px 10px 40px;
+}
+div.chart{
+	width: 100%;
+	background-color: black;
+	color: white;
+	float: left;
+	padding: 0px 0px 0px 0px;
+	margin: 0px 0px 0px 0px;
+}
+canvas {
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
 }

@@ -1,21 +1,30 @@
+
+<!doctype html>
 <html>
 	<head>
 		<link rel="stylesheet" type="text/css" href="index.css">
 		<script src="jquery.min.js"></script>
+		<script src="Chart.bundle.min.js"></script>
 	</head>
 	<body>
 		<div id="main" class="main">
 			LOADING...
 		</div>
-		<br></br>
+		<div class="chart">
+				<canvas id="canvas" height="50"></canvas>
+		</div>
 		<div id="data" class="stat"></div>
-		<br/>
-		<a href=".">reload</a>	
+		<div class="stat"><a href=".">reload</a></div>
+			
 		<script>
+			var mock=false;
+			var mockdata={};
 			var refreshTimer;
-			var dataCache="";
+			var dataCache=null;
+			var dataUpdate={};
 			var sendUpdates=false;
 			var currentRefreshInterval=0;
+			var temperatureDisplayUnits ="C";
 			// flow is
 			// click
 			// stop intervals
@@ -32,82 +41,177 @@
 				var zone=e.split('.')[0];
 				var action=e.split('.')[1];
 				var setPoint=70;
-				console.log(zone);
-				for(var z in dataCache){
-					if( zone==dataCache[z].name ){
-						//console.log("found");
-						setPoint=dataCache[z].setPoint + (action=='+'?1:-1);
-						dataCache[z].setPoint=setPoint;
-						break;
-					}
+				//console.log(zone);
+				if( !dataUpdate[zone] ){
+					console.log("reset dataUpdate["+zone+"]");
+					console.log(dataCache.zones[zone]);
+					dataUpdate[zone]=fmtTemp(dataCache.zones[zone].setPoint);
 				}
+				setPoint=Number(dataUpdate[zone]) + (action=='+'?1:-1);
+				dataUpdate[zone]=setPoint;
+				dataCache.zones[zone].setPoint=unFmtTemp(setPoint);
+				console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
 				sendUpdates=true;
-				displayData(dataCache);
+				displayData(dataCache.zones);
 				startInterval();
 			}
+			function fmtTemp(temp){
+				return ( temperatureDisplayUnits == "F" ? (temp*9/5+32).toFixed(2) : temp );
+			}
+			function unFmtTemp(temp){
+				return ( temperatureDisplayUnits == "F" ? ((temp-32)*5/9).toFixed(2) : temp );
+			}
 			function displayData(data){
-				dataCache=data;
-				$("#data").text("OK");
+				$("#data").text("OK - " + new Date().toString());
 				$("#main").html("");
-				for(var z in data){
-					var zone=data[z].name;
-					var currentTemp=data[z].currentTemp;
-					var setPoint=data[z].setPoint;
-					var running=data[z].running;
+				for(var zone in data){
+					//var zone=data[z].name;
+					temperatureDisplayUnits = data[zone].temperatureDisplayUnits || temperatureDisplayUnits;
+					var currentTemp=fmtTemp(data[zone].currentTemp);
+					var setPoint=fmtTemp(data[zone].setPoint);
+					var running=data[zone].running;
 					var currentReads="";
-					for(var r in data[z].currentReads){
-						currentReads+=data[z].currentReads[r].location + " = " + data[z].currentReads[r].temp+"<br/>";
+					for(var r in data[zone].sensors){
+						var age=new Date()-Date.parse(data[zone].sensors[r].timestamp);
+						currentReads+=data[zone].sensors[r].location + " = " + fmtTemp(data[zone].sensors[r].temp) + (age>130000?"*":"") + "<br/>";
 					}
 					$("#main").append(
 						'<div id="'+zone+'" class="zone">'+
 							'<div class="h3">'+zone+'</div>'+
-							'<div class="'+(running?'tempRun':'tempOff')+'">'+currentTemp+'</div>'+
+							'<div class="'+(running?'tempRun':'tempOff')+'">'+Math.round(currentTemp)+'</div>'+
 							'<div class="ctrl">'+
 								'<button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button>'+
-								'<div class="setpt"><span class="set">'+setPoint+'</span><span class="lbl">set</span></div>'+
+								'<div class="setpt"><span class="set">'+Math.round(setPoint)+'</span><span class="lbl">set</span></div>'+
 								'<button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button>'+
 							'</div>'+
 							'<div class="readings">'+currentReads+'</div>'+
 						'</div>');
 				}
 			}
+			function drawGraph(furnaceLog){
+				furnaceLog.forEach(o => 
+					{
+						if(o.timestamp)delete Object.assign(o, {["x"]: o["timestamp"] })["timestamp"];
+						if(o.run!==undefined)delete Object.assign(o, {["y"]: (o["run"]?"ON":"OFF") })["run"];
+					}
+				);
+				var color = Chart.helpers.color;
+				window.chartColors = {
+					red: 'rgb(255, 99, 132)',
+					orange: 'rgb(255, 159, 64)',
+					yellow: 'rgb(255, 205, 86)',
+					green: 'rgb(75, 192, 192)',
+					blue: 'rgb(54, 162, 235)',
+					purple: 'rgb(153, 102, 255)',
+					grey: 'rgb(201, 203, 207)'
+				};
+				var config = {
+					type: 'line',
+					data: {
+						yLabels: ["ON", "OFF"],
+						datasets: [{
+							label: 'Zone1',
+							backgroundColor: color(window.chartColors.red).alpha(0.5).rgbString(),
+							borderColor: window.chartColors.red,
+							fill: false,
+							steppedLine: true,
+							data: furnaceLog.filter(o => o.zone=="1"),
+						}, {
+							label: 'Zone2',
+							backgroundColor: color(window.chartColors.blue).alpha(0.5).rgbString(),
+							borderColor: window.chartColors.blue,
+							fill: false,
+							steppedLine: true,
+							data: furnaceLog.filter(o => o.zone=="2"),
+						}, {
+							label: 'Zone3',
+							backgroundColor: color(window.chartColors.green).alpha(0.5).rgbString(),
+							borderColor: window.chartColors.green,
+							fill: false,
+							steppedLine: true,
+							data: furnaceLog.filter(o => o.zone=="3"),
+						}]
+					},
+					options: {
+						scales: {
+							xAxes: [{
+								type: 'time',
+								time: {
+									//format: timeFormat,
+									// round: 'day'
+									tooltipFormat: 'll HH:mm'
+								},
+								scaleLabel: {
+									display: true,
+									labelString: 'Time'
+								}
+							}],
+							yAxes: [{
+								type: 'category',
+								position: 'left',
+								display: true,
+								scaleLabel: {
+									display: false,
+									labelString: 'State'
+								}
+							}]
+						},
+					}
+				};
+
+				
+				var ctx = document.getElementById('canvas').getContext('2d');
+				window.myLine = new Chart(ctx, config);
+				var colorNames = Object.keys(window.chartColors);
+			}
 			function moveData(){
 				if(sendUpdates){
 					sendUpdates=false;
-					for(var z in dataCache){
-						var zone=dataCache[z].name;
-						var setPoint=dataCache[z].setPoint;
+					for(var zone in dataUpdate){
+						var setPoint=dataUpdate[zone];
 						// need to push only changes
 						console.log("set "+ zone+ " = " + setPoint);
-						$.ajax({
-			            	type: 'PUT',
-			            	url: '/set/'+zone+'/'+setPoint,						
-			            	error: function(err) {
-			                	$("#data").text("Error on PUT");
-								console.log(JSON.stringify(err));
-			            	}
-			        	});
+						if(!mock){
+							$.ajax({
+			            			type: 'PUT',
+			            			url: '/set/'+zone+'/'+unFmtTemp( setPoint ),						
+			            			error: function(err) {
+			            				$("#data").text("Error on PUT");
+										console.log(JSON.stringify(err));
+		            				}
+							});
+						}
 					}
+					dataUpdate={};
 					startInterval();
 				}
 				else{
 					console.log("get");
-					$.ajax({
-			            type: 'GET',
-			            url: '/status',						
-			            error: function(err) {
-			                $("#data").text("Error on GET");
-							console.log(JSON.stringify(err));
-			            }
-			        }).done(function(data){
-						if(data)displayData(data);	
-					});
+					if(!mock){
+						$.ajax({
+			            	type: 'GET',
+			            	url: '/status',						
+			            	error: function(err) {
+			                	$("#data").text("Error on GET - " + new Date().toString());
+								console.log(JSON.stringify(err));
+			            	}
+			        	}).done(function(data){
+							if(data){
+								dataCache=data;
+								displayData(data.zones);
+								drawGraph(data.furnaceLog);
+							}	
+						});
+					}else{
+						dataCache=mockdata;
+						displayData(mockdata.zones);
+						drawGraph(mockdata.furnaceLog);
+					}
 					if(currentRefreshInterval<15000){
 						startInterval(15000);
 					}
 				}
 			}
-			
 			function startInterval(timeout){
 				if(refreshTimer)clearInterval(refreshTimer);
 				refreshTimer=null;
