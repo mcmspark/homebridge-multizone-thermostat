@@ -1,225 +1,285 @@
-
 <!doctype html>
 <html>
-	<head>
-		<link rel="stylesheet" type="text/css" href="index.css">
-		<script src="jquery.min.js"></script>
-		<script src="Chart.bundle.min.js"></script>
-	</head>
-	<body>
-		<div id="main" class="main">
-			LOADING...
-		</div>
-		<div class="chart">
-				<canvas id="canvas" height="50"></canvas>
-		</div>
-		<div id="data" class="stat"></div>
-		<div class="stat"><a href=".">reload</a></div>
-			
-		<script>
-			var mock=false;
-			var mockdata={};
-			var refreshTimer;
-			var dataCache=null;
-			var dataUpdate={};
-			var sendUpdates=false;
-			var currentRefreshInterval=0;
-			var temperatureDisplayUnits ="C";
-			// flow is
-			// click
-			// stop intervals
-			// update data cache and disply the update
-			// pend a put of the update with a 3 sec timer
-			// when timer fires
-			// post the update
-			// clear the post flag
-			// get fresh data
-			// reset the timer to 10 sec
-			function buttonClick(e){
-				clearInterval(refreshTimer);
-				refreshTimer=null;
-				var zone=e.split('.')[0];
-				var action=e.split('.')[1];
-				var setPoint=70;
-				//console.log(zone);
-				if( !dataUpdate[zone] ){
-					console.log("reset dataUpdate["+zone+"]");
-					console.log(dataCache.zones[zone]);
-					dataUpdate[zone]=fmtTemp(dataCache.zones[zone].setPoint);
+
+<head>
+	<link rel="stylesheet" type="text/css" href="index.css">
+	<script src="jquery.min.js"></script>
+	<script src="Chart.bundle.min.js"></script>
+</head>
+
+<body>
+	<div id="main" class="main">
+		LOADING...
+	</div>
+	<div class="chart">
+		<canvas id="canvas" class="canvas" height="50"></canvas>
+		<canvas id="tempCanvas" class="canvas" height="50"></canvas>
+		<canvas id="pressCanvas" class="canvas" height="50"></canvas>
+	</div>
+	<div id="data" class="stat"></div>
+	<div class="stat"><a href=".">reload</a></div>
+
+	<script>
+		var mock = window.mockdata != undefined;
+		var refreshTimer;
+		var dataCache = null;
+		var dataUpdate = {};
+		var sendUpdates = false;
+		var currentRefreshInterval = 0;
+		var temperatureDisplayUnits = "C";
+		// flow is
+		// click
+		// stop intervals
+		// update data cache and disply the update
+		// pend a put of the update with a 3 sec timer
+		// when timer fires
+		// post the update
+		// clear the post flag
+		// get fresh data
+		// reset the timer to 10 sec
+		function buttonClick(e) {
+			clearInterval(refreshTimer);
+			refreshTimer = null;
+			var zone = e.split('.')[0];
+			var action = e.split('.')[1];
+			var setPoint = 70;
+			//console.log(zone);
+			if (!dataUpdate[zone]) {
+				//console.log("reset dataUpdate[" + zone + "]");
+				//console.log(dataCache.zones[zone]);
+				dataUpdate[zone]={};
+				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
+			}
+			setPoint = Number(dataUpdate[zone].setPoint) + (action == '+' ? 1 : -1);
+			dataUpdate[zone].setPoint = setPoint;
+			dataCache.zones[zone].setPoint = unFmtTemp(setPoint);
+			console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
+			sendUpdates = true;
+			displayData(dataCache.zones);
+			startInterval();
+		}
+		function turnOnOff(e){
+			var zone=e.id.split('.')[1];
+			var onOff=e.checked;
+			if (!dataUpdate[zone]) {
+				//console.log("reset dataUpdate[" + zone + "]");
+				//console.log(dataCache.zones[zone]);
+				dataUpdate[zone]={};
+				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
+			}
+			dataUpdate[zone].HeatingCoolingState = onOff ? "HEAT" : "OFF";
+			dataCache.zones[zone].HeatingCoolingState = onOff ? "HEAT" : "OFF";
+			//console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
+			sendUpdates = true;
+			//displayData(dataCache.zones);
+			startInterval();
+		}
+		function fmtTemp(temp) {
+			return (temperatureDisplayUnits == "F" ? (temp * 9 / 5 + 32).toFixed(2) : temp);
+		}
+		function unFmtTemp(temp) {
+			return (temperatureDisplayUnits == "F" ? ((temp - 32) * 5 / 9).toFixed(2) : temp);
+		}
+		function displayData(data) {
+			$("#data").text("OK - " + new Date().toString());
+			$("#main").html("");
+			for (var zone in data) {
+				//var zone=data[z].name;
+				temperatureDisplayUnits = data[zone].temperatureDisplayUnits || temperatureDisplayUnits;
+				var currentTemp = fmtTemp(data[zone].currentTemp);
+				var setPoint = fmtTemp(data[zone].setPoint);
+				var running = data[zone].running;
+				var onOff = data[zone].HeatingCoolingState != 'OFF';
+				var currentReads = "";
+				for (var r in data[zone].sensors) {
+					var age = new Date() - Date.parse(data[zone].sensors[r].timestamp);
+					currentReads += data[zone].sensors[r].location + " = " + fmtTemp(data[zone].sensors[r].temp) + (age > 130000 ? "*" : "") + "<br/>";
 				}
-				setPoint=Number(dataUpdate[zone]) + (action=='+'?1:-1);
-				dataUpdate[zone]=setPoint;
-				dataCache.zones[zone].setPoint=unFmtTemp(setPoint);
-				console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
-				sendUpdates=true;
-				displayData(dataCache.zones);
+				$("#main").append(
+					'<div id="' + zone + '" class="zone">' +
+					'<div class="h3">' + 
+					'<label class="switch">' +
+					' <input id="checkbox.'+zone+'" type="checkbox" onclick="turnOnOff(this)" ' + (onOff?'checked':'') +'/>' +
+					' <span class="slider round"></span>' +
+					'</label>' + zone + '</div>' +
+					'<div class="' + (running ? 'tempRun' : 'tempOff') + '">' + Math.round(currentTemp) + '</div>' +
+					'<div class="ctrl">' +
+					'<button class="button" onclick="buttonClick(' + "'" + zone + ".+'" + ')">+</button>' +
+					'<div class="setpt"><span class="set">' + Math.round(setPoint) + '</span><span class="lbl">set</span></div>' +
+					'<button class="button" onclick="buttonClick(' + "'" + zone + ".-'" + ')">-</button>' +
+					'</div>' +
+					'<div class="readings">' + currentReads + '</div>' +
+					'</div>');
+			}
+			
+		}
+		function drawGraph(statusData) {
+			var timeFormat = 'MM/DD/YYYY HH:mm';
+			
+			window.chartColors = {
+				red: 'rgb(255, 99, 132)',
+				orange: 'rgb(255, 159, 64)',
+				yellow: 'rgb(255, 205, 86)',
+				green: 'rgb(75, 192, 192)',
+				blue: 'rgb(54, 162, 235)',
+				purple: 'rgb(153, 102, 255)',
+				grey: 'rgb(201, 203, 207)',
+				AA: 'rgb(255, 99, 132)',
+				AB: 'rgb(255, 159, 64)',
+				AC: 'rgb(255, 205, 86)',
+				AD: 'rgb(75, 192, 192)',
+				AE: 'rgb(54, 162, 235)',
+				AF: 'rgb(153, 102, 255)',
+				AH: 'rgb(201, 203, 207)',
+				'1': 'rgb(255, 99, 132)',
+				'2': 'rgb(255, 159, 64)',
+				'3': 'rgb(75, 192, 192)',
+				'4': 'rgb(54, 162, 235)',
+				'5': 'rgb(153, 102, 255)',
+				'6': 'rgb(201, 203, 207)',
+				BM: 'rgb(255, 99, 132)'
+			};
+			var minDate = new Date(864000000000000);
+			var maxDate = new Date(-864000000000000);
+			statusData.sensorLog.forEach(o => {
+				var ts = Date.parse(o.timestamp);
+				if (ts < minDate) minDate = ts;
+				if (ts > maxDate) maxDate = ts;
+			}
+			);
+			var pressconfig, tempconfig, fconfig;
+
+            tempconfig = BuildChartConfig(tempconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AH'], "", "temp", undefined, undefined, false, v => v*9/5+32);
+            fconfig = BuildChartConfig(fconfig, statusData.furnaceLog, minDate, maxDate, "zone", ['1', '2', '3'], "Zone", "run", ["ON", "OFF"], "category", true, v => v?"ON":"OFF");
+            pressconfig = BuildChartConfig(pressconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['BM'], "", "press");
+
+
+			var ctx = document.getElementById('canvas').getContext('2d');
+			window.myLine = new Chart(ctx, fconfig);
+			var tempctx = document.getElementById('tempCanvas').getContext('2d');
+			window.myLine2 = new Chart(tempctx, tempconfig);
+			var pressctx = document.getElementById('pressCanvas').getContext('2d');
+			window.myLine3 = new Chart(pressctx, pressconfig);
+
+		}
+
+		function moveData() {
+			if (sendUpdates) {
+				sendUpdates = false;
+				for (var zone in dataUpdate) {
+					var setPoint = dataUpdate[zone].setPoint;
+					var HCState=dataUpdate[zone].HeatingCoolingState;
+					// need to push only changes
+					console.log("set zone=" + zone + " HCState=" + HCState + " temp=" + setPoint);
+					if (!mock) {
+						$.ajax({
+							type: 'PUT',
+							url: '/set/' + zone + '/' + HCState + '/' + unFmtTemp(setPoint),
+							error: function (err) {
+								$("#data").text("Error on PUT");
+								console.log(JSON.stringify(err));
+							}
+						});
+					}
+				}
+				dataUpdate = {};
 				startInterval();
 			}
-			function fmtTemp(temp){
-				return ( temperatureDisplayUnits == "F" ? (temp*9/5+32).toFixed(2) : temp );
-			}
-			function unFmtTemp(temp){
-				return ( temperatureDisplayUnits == "F" ? ((temp-32)*5/9).toFixed(2) : temp );
-			}
-			function displayData(data){
-				$("#data").text("OK - " + new Date().toString());
-				$("#main").html("");
-				for(var zone in data){
-					//var zone=data[z].name;
-					temperatureDisplayUnits = data[zone].temperatureDisplayUnits || temperatureDisplayUnits;
-					var currentTemp=fmtTemp(data[zone].currentTemp);
-					var setPoint=fmtTemp(data[zone].setPoint);
-					var running=data[zone].running;
-					var currentReads="";
-					for(var r in data[zone].sensors){
-						var age=new Date()-Date.parse(data[zone].sensors[r].timestamp);
-						currentReads+=data[zone].sensors[r].location + " = " + fmtTemp(data[zone].sensors[r].temp) + (age>130000?"*":"") + "<br/>";
-					}
-					$("#main").append(
-						'<div id="'+zone+'" class="zone">'+
-							'<div class="h3">'+zone+'</div>'+
-							'<div class="'+(running?'tempRun':'tempOff')+'">'+Math.round(currentTemp)+'</div>'+
-							'<div class="ctrl">'+
-								'<button class="button" onclick="buttonClick('+"'"+zone+".+'"+')">+</button>'+
-								'<div class="setpt"><span class="set">'+Math.round(setPoint)+'</span><span class="lbl">set</span></div>'+
-								'<button class="button" onclick="buttonClick('+"'"+zone+".-'"+')">-</button>'+
-							'</div>'+
-							'<div class="readings">'+currentReads+'</div>'+
-						'</div>');
-				}
-			}
-			function drawGraph(furnaceLog){
-				furnaceLog.forEach(o => 
-					{
-						if(o.timestamp)delete Object.assign(o, {["x"]: o["timestamp"] })["timestamp"];
-						if(o.run!==undefined)delete Object.assign(o, {["y"]: (o["run"]?"ON":"OFF") })["run"];
-					}
-				);
-				var color = Chart.helpers.color;
-				window.chartColors = {
-					red: 'rgb(255, 99, 132)',
-					orange: 'rgb(255, 159, 64)',
-					yellow: 'rgb(255, 205, 86)',
-					green: 'rgb(75, 192, 192)',
-					blue: 'rgb(54, 162, 235)',
-					purple: 'rgb(153, 102, 255)',
-					grey: 'rgb(201, 203, 207)'
-				};
-				var config = {
-					type: 'line',
-					data: {
-						yLabels: ["ON", "OFF"],
-						datasets: [{
-							label: 'Zone1',
-							backgroundColor: color(window.chartColors.red).alpha(0.5).rgbString(),
-							borderColor: window.chartColors.red,
-							fill: false,
-							steppedLine: true,
-							data: furnaceLog.filter(o => o.zone=="1"),
-						}, {
-							label: 'Zone2',
-							backgroundColor: color(window.chartColors.blue).alpha(0.5).rgbString(),
-							borderColor: window.chartColors.blue,
-							fill: false,
-							steppedLine: true,
-							data: furnaceLog.filter(o => o.zone=="2"),
-						}, {
-							label: 'Zone3',
-							backgroundColor: color(window.chartColors.green).alpha(0.5).rgbString(),
-							borderColor: window.chartColors.green,
-							fill: false,
-							steppedLine: true,
-							data: furnaceLog.filter(o => o.zone=="3"),
-						}]
-					},
-					options: {
-						scales: {
-							xAxes: [{
-								type: 'time',
-								time: {
-									//format: timeFormat,
-									// round: 'day'
-									tooltipFormat: 'll HH:mm'
-								},
-								scaleLabel: {
-									display: true,
-									labelString: 'Time'
-								}
-							}],
-							yAxes: [{
-								type: 'category',
-								position: 'left',
-								display: true,
-								scaleLabel: {
-									display: false,
-									labelString: 'State'
-								}
-							}]
-						},
-					}
-				};
-
-				
-				var ctx = document.getElementById('canvas').getContext('2d');
-				window.myLine = new Chart(ctx, config);
-				var colorNames = Object.keys(window.chartColors);
-			}
-			function moveData(){
-				if(sendUpdates){
-					sendUpdates=false;
-					for(var zone in dataUpdate){
-						var setPoint=dataUpdate[zone];
-						// need to push only changes
-						console.log("set "+ zone+ " = " + setPoint);
-						if(!mock){
-							$.ajax({
-			            			type: 'PUT',
-			            			url: '/set/'+zone+'/'+unFmtTemp( setPoint ),						
-			            			error: function(err) {
-			            				$("#data").text("Error on PUT");
-										console.log(JSON.stringify(err));
-		            				}
-							});
+			else {
+				console.log("get");
+				if (!mock) {
+					$.ajax({
+						type: 'GET',
+						url: '/status',
+						error: function (err) {
+							$("#data").text("Error on GET - " + new Date().toString());
+							console.log(JSON.stringify(err));
 						}
-					}
-					dataUpdate={};
-					startInterval();
+					}).done(function (data) {
+						if (data) {
+							dataCache = data;
+							displayData(data.zones);
+							drawGraph(data);
+						}
+					});
+				} else {
+					if (refreshTimer) clearInterval(refreshTimer);
+					dataCache = window.mockdata;
+					displayData(window.mockdata.zones);
+					drawGraph(window.mockdata);
 				}
-				else{
-					console.log("get");
-					if(!mock){
-						$.ajax({
-			            	type: 'GET',
-			            	url: '/status',						
-			            	error: function(err) {
-			                	$("#data").text("Error on GET - " + new Date().toString());
-								console.log(JSON.stringify(err));
-			            	}
-			        	}).done(function(data){
-							if(data){
-								dataCache=data;
-								displayData(data.zones);
-								drawGraph(data.furnaceLog);
-							}	
-						});
-					}else{
-						dataCache=mockdata;
-						displayData(mockdata.zones);
-						drawGraph(mockdata.furnaceLog);
-					}
-					if(currentRefreshInterval<15000){
-						startInterval(15000);
-					}
+				if (currentRefreshInterval < 15000) {
+					startInterval(15000);
 				}
 			}
-			function startInterval(timeout){
-				if(refreshTimer)clearInterval(refreshTimer);
-				refreshTimer=null;
-				currentRefreshInterval=( Number(timeout)>3000 )?Number(timeout):3000;
-				console.log("Wait "+currentRefreshInterval);
-				refreshTimer=setInterval(moveData,currentRefreshInterval);
-			}
-			$(startInterval);
-		</script>
-	</body>
+		}
+		function BuildChartConfig(config, data, mindate, maxdate, datasetKey, keyvalues, keylabel, yAxisKey, yAxisLabels, yAxisType, steppedLine, valueConversion) {
+            var color = Chart.helpers.color;
+			var linedata=[];
+            //console.log("valueConversion "+valueConversion);
+            //data = JSON.parse(JSON.stringify(data));
+            data.forEach(o => {
+                if (o.timestamp && (o[yAxisKey] !== undefined)){
+                    var item={
+                        x: o.timestamp,
+                        y: (valueConversion!==undefined ? valueConversion(o[yAxisKey]) : o[yAxisKey]) 
+                    }
+                    item[datasetKey]=o[datasetKey];
+                    linedata.push(item);
+                }
+            });
+            //console.log("linedata has "+linedata.length);
+            config = {
+                type: 'line',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    scales: {
+                        xAxes: [{
+                            type: 'time',
+                            time: {
+                                max: maxdate,
+                                min: mindate,
+                                tooltipFormat: 'll HH:mm'
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Time'
+                            }
+                        }],
+                        yAxes: [{
+                            position: 'left',
+                            display: true,
+                        }]
+                    },
+                }
+            };
+            if (yAxisLabels) config.data.yLabels = yAxisLabels;
+            if (yAxisType) config.options.scales.yAxes[0].type = yAxisType;
+            keyvalues.forEach(z => config.data.datasets.push(
+                {
+                    label: keylabel + z,
+                    backgroundColor: color(window.chartColors[z]).alpha(0.5).rgbString(),
+                    borderColor: window.chartColors[z],
+                    fill: false,
+                    pointRadius: 1,
+                    steppedLine: steppedLine || false,
+                    data: linedata.filter(o => o[datasetKey] == z),
+                }
+            ));
+            return config;
+        }
+		function startInterval(timeout) {
+			if (refreshTimer) clearInterval(refreshTimer);
+			refreshTimer = null;
+			currentRefreshInterval = (Number(timeout) > 3000) ? Number(timeout) : 3000;
+			//console.log("Wait " + currentRefreshInterval);
+			
+			refreshTimer = setInterval(moveData, currentRefreshInterval);
+		}
+		$(startInterval);
+	</script>
+</body>
+
 </html>
