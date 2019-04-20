@@ -49,6 +49,7 @@
 				//console.log(dataCache.zones[zone]);
 				dataUpdate[zone]={};
 				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
+				dataUpdate[zone].HeatingCoolingState =  "HEAT";
 			}
 			setPoint = Number(dataUpdate[zone].setPoint) + (action == '+' ? 1 : -1);
 			dataUpdate[zone].setPoint = setPoint;
