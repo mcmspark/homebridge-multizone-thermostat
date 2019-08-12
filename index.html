@@ -3,22 +3,28 @@
 
 <head>
 	<link rel="stylesheet" type="text/css" href="index.css">
+	<link rel="stylesheet" type="text/css" href="node_modules/css-toggle-switch/dist/toggle-switch.css">
 	<script src="jquery.min.js"></script>
 	<script src="Chart.bundle.min.js"></script>
 </head>
 
 <body>
-	<div id="main" class="main">
-		LOADING...
+		<a class="weatherwidget-io" href="https://forecast7.com/en/41d43n81d39/chagrin-falls/?unit=us" data-label_1="CHAGRIN FALLS" data-label_2="WEATHER" data-theme="weather_one" >CHAGRIN FALLS WEATHER</a>
+		<script>
+		!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src='https://weatherwidget.io/js/widget.min.js';fjs.parentNode.insertBefore(js,fjs);}}(document,'script','weatherwidget-io-js');
+		</script>
+	<div id="scrolableWrapper" class="scrolableWrapper">
+		<div id="main" class="main">
+			LOADING...
+		</div>
+		<div class="chart">
+			<canvas id="canvas" class="canvas" height="50"></canvas>
+			<canvas id="tempCanvas" class="canvas" height="50"></canvas>
+			<canvas id="pressCanvas" class="canvas" height="50"></canvas>
+		</div>
+		<div id="data" class="stat"></div>
+		<div class="stat"><a href=".">reload</a></div>
 	</div>
-	<div class="chart">
-		<canvas id="canvas" class="canvas" height="50"></canvas>
-		<canvas id="tempCanvas" class="canvas" height="50"></canvas>
-		<canvas id="pressCanvas" class="canvas" height="50"></canvas>
-	</div>
-	<div id="data" class="stat"></div>
-	<div class="stat"><a href=".">reload</a></div>
-
 	<script>
 		var mock = window.mockdata != undefined;
 		var refreshTimer;
@@ -43,33 +49,35 @@
 			var zone = e.split('.')[0];
 			var action = e.split('.')[1];
 			var setPoint = 70;
+			var HCState = document.querySelector('input[name="hvacMode'+zone+'"]:checked').value;
 			//console.log(zone);
 			if (!dataUpdate[zone]) {
 				//console.log("reset dataUpdate[" + zone + "]");
 				//console.log(dataCache.zones[zone]);
 				dataUpdate[zone]={};
 				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
-				dataUpdate[zone].HeatingCoolingState =  "HEAT";
+				dataUpdate[zone].HeatingCoolingState =  HCState;
 			}
 			setPoint = Number(dataUpdate[zone].setPoint) + (action == '+' ? 1 : -1);
 			dataUpdate[zone].setPoint = setPoint;
 			dataCache.zones[zone].setPoint = unFmtTemp(setPoint);
-			console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
+			//console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
 			sendUpdates = true;
 			displayData(dataCache.zones);
 			startInterval();
 		}
 		function turnOnOff(e){
 			var zone=e.id.split('.')[1];
-			var onOff=e.checked;
+			var mode=e.id.split('.')[0].toUpperCase();
+			//console.log("zone "+ zone + "in" + mode + " mode");
 			if (!dataUpdate[zone]) {
 				//console.log("reset dataUpdate[" + zone + "]");
 				//console.log(dataCache.zones[zone]);
 				dataUpdate[zone]={};
 				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
 			}
-			dataUpdate[zone].HeatingCoolingState = onOff ? "HEAT" : "OFF";
-			dataCache.zones[zone].HeatingCoolingState = onOff ? "HEAT" : "OFF";
+			dataUpdate[zone].HeatingCoolingState = mode;
+			dataCache.zones[zone].HeatingCoolingState = mode;
 			//console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
 			sendUpdates = true;
 			//displayData(dataCache.zones);
@@ -84,13 +92,15 @@
 		function displayData(data) {
 			$("#data").text("OK - " + new Date().toString());
 			$("#main").html("");
+			// keep all thermostats in the same mode?
+			var runmode='';
 			for (var zone in data) {
 				//var zone=data[z].name;
 				temperatureDisplayUnits = data[zone].temperatureDisplayUnits || temperatureDisplayUnits;
 				var currentTemp = fmtTemp(data[zone].currentTemp);
 				var setPoint = fmtTemp(data[zone].setPoint);
 				var running = data[zone].running;
-				var onOff = data[zone].HeatingCoolingState != 'OFF';
+				runmode=data[zone].HeatingCoolingState;
 				var currentReads = "";
 				for (var r in data[zone].sensors) {
 					var age = new Date() - Date.parse(data[zone].sensors[r].timestamp);
@@ -99,20 +109,33 @@
 				$("#main").append(
 					'<div id="' + zone + '" class="zone">' +
 					'<div class="h3">' + 
-					'<label class="switch">' +
-					' <input id="checkbox.'+zone+'" type="checkbox" onclick="turnOnOff(this)" ' + (onOff?'checked':'') +'/>' +
-					' <span class="slider round"></span>' +
-					'</label>' + zone + '</div>' +
-					'<div class="' + (running ? 'tempRun' : 'tempOff') + '">' + Math.round(currentTemp) + '</div>' +
+					//'<div class="switch-toggle switch-3 switch-candy"><input id="cool" name="state-d" type="radio" checked=""><label for="cool" onclick="">Cool</label><input id="off" name="state-d" type="radio" checked="checked"><label for="off" onclick="">Off</label><input id="heat" name="state-d" type="radio"><label for="heat" onclick="">Heat</label>' +
+					//'<a></a></div>' +
+					//'<label class="switch">' +
+					//' <input id="checkbox.'+zone+'" type="checkbox" onclick="turnOnOff(this)" ' + (onOff?'checked':'') +'/>' +
+					//' <span class="slider round"></span>' +
+					//'</label>' + 
+					zone + '</div>' +
+					'<div class="tempRun' + running + '">' + Math.round(currentTemp) + '</div>' +
 					'<div class="ctrl">' +
 					'<button class="button" onclick="buttonClick(' + "'" + zone + ".+'" + ')">+</button>' +
 					'<div class="setpt"><span class="set">' + Math.round(setPoint) + '</span><span class="lbl">set</span></div>' +
 					'<button class="button" onclick="buttonClick(' + "'" + zone + ".-'" + ')">-</button>' +
-					'</div>' +
+					'</div><div class="runmode">' +
+					'<fieldset style="padding:0px;">' +
+					'	<div class="switch-toggle">' +
+					'		<input id="cool.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="COOL" ' + (runmode=='COOL'?'checked':'') + '>' +
+					'		<label for="cool.'+zone+'" >Cool</label>' +
+					'		<input id="off.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="OFF" ' + (runmode=='OFF'?'checked':'') + '>' +
+					'		<label for="off.'+zone+'" >Off</label>' +
+					'		<input id="heat.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="HEAT" ' + (runmode=='HEAT'?'checked':'') + '>' +
+					'		<label for="heat.'+zone+'" >Heat</label>' +
+					'		<a></a>' +
+					'	</div>' +
+					'</fieldset></div>' +
 					'<div class="readings">' + currentReads + '</div>' +
 					'</div>');
 			}
-			
 		}
 		function drawGraph(statusData) {
 			var timeFormat = 'MM/DD/YYYY HH:mm';

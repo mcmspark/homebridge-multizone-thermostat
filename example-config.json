@@ -1,89 +1,78 @@
 {
-    "bridge": {
-	    "name": "Homebridge",
-	    "username": "CC:22:3D:E3:CE:30",
-	    "port": 51826,
-	    "pin": "031-45-154"
-    },
-    "description": "",
-    "accessories": [
-    ],
-    "platforms": [
-            {
-                "platform" : "MultiZonePlatform",
-                "name" : "MultiZone Platform",
-                "sensorCheckMilliseconds" : 60000,
-                "temperatureDisplayUnits" : 1,
-                "minOnOffTime" : 60000,
-                "startDelay" : 10000,
-                "serverPort" : 3000,
-                "serialPort" : "/dev/serial0",
-                "serialCfg" : { "baudRate" : 9600 },
-				"zones" : {
-                    "1" : {
-                        "relayPin" : 17,
-                        "sensors" : [
-                            {
-                                "id" : "AE",
-                                "location" : "snug",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            },
-                            {
-                                "id" : "AF",
-                                "location" : "living",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            },
-                            {
-                                "id" : "AH",
-                                "location" : "gavin",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            },
-                            {
-                                "id" : "BM",
-                                "location" : "pi",
-                                "source" : "I2C",
-                                "extras" : "humid,press"
-                            }
-                        ]
-                    },
-                    "2" : {
-                        "relayPin" : 27,
-                        "sensors" : [
-                            {
-                                "id" : "AA",
-                                "location" : "master",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            },
-                            {
-                                "id" : "AB",
-                                "location" : "tess",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            },
-                            {
-                                "id" : "AC",
-                                "location" : "kate",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            }
-                        ]
-                    },
-                    "3" : {
-                        "relayPin" : 22,
-                        "sensors" : [
-                            {
-                                "id" : "AD",
-                                "location" : "addition",
-                                "source" : "serial",
-                                "extras" : "batt"
-                            }
-                        ]
-                    }
-                }
-            }
-    ]
+	"bridge": {
+		"name": "Homebridge",
+		"username": "CC:22:3D:E3:CE:30",
+		"port": 51826,
+		"pin": "031-45-154"
+	},
+	"description": "",
+	"accessories": [],
+	"platforms": [{
+			"platform": "BelkinWeMo",
+			"name": "WeMo Platform"
+		},
+		{
+			"platform": "MultiZonePlatform",
+			"name": "MultiZone Platform",
+			"sensorCheckMilliseconds": 60000,
+			"temperatureDisplayUnits": 1,
+			"minOnOffTime": 300000,
+			"startDelay": 10000,
+			"serverPort": 3000,
+			"serialPort": "/dev/serial0",
+			"serialCfg": {
+				"baudRate": 9600
+			},
+			"relayPins": [25,24,23,22,27,17],
+			"zones": {
+				"1": {
+					"relayPinHeat": 1,
+					"sensors": {
+						"AE": {
+							"location": "snug",
+							"source": "serial",
+							"extras": "batt"
+						},
+						"AF": {
+							"location": "living",
+							"source": "serial",
+							"extras": "batt"
+						}
+					}
+				},
+				"2": {
+					"relayPinHeat": 2,
+					"relayPinCool": 4,
+					"relayPinFan": 5,
+					"sensors": {
+						"AA": {
+							"location": "master",
+							"source": "serial",
+							"extras": "batt"
+						},
+						"AB": {
+							"location": "tess",
+							"source": "serial",
+							"extras": "batt"
+						},
+						"AC": {
+							"location": "kate",
+							"source": "serial",
+							"extras": "batt"
+						}
+					}
+				},
+				"3": {
+					"relayPinHeat": 3,
+					"sensors": {
+						"AH": {
+							"location": "addition",
+							"source": "serial",
+							"extras": "batt"
+						}
+					}
+				}
+			}
+		}
+	]
 }

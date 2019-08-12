@@ -1,6 +1,6 @@
 {
   "name": "homebridge-multizone-thermostat",
-  "version": "4.2.2",
+  "version": "5.1.0",
   "description": "A homebridge platform that adds multiple zone thermostats",
   "main": "index.js",
   "scripts": {
@@ -28,6 +28,7 @@
   "homepage": "https://github.com/mcmspark/homebridge-multizone-thermostat#readme",
   "dependencies": {
     "chart.js": "^2.7.3",
+    "css-toggle-switch": "^4.1.0",
     "mime": "^2.4.0"
   }
 }
