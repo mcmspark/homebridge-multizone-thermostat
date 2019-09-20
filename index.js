@@ -109,6 +109,8 @@ function MultiZonePlatform(log, config, api) {
   this.serialPort = config.serialPort || '/dev/serial0';
   this.serialCfg = config.serialCfg || { baudRate : 9600 };
   this.hasBME280 = config.hasBME280;
+  this.cpuTemp=20.0;
+  this.weatherData={'condition':'','temp':''};
   this.setupGPIO();
   this.startup();
   if (api) {
@@ -153,11 +155,12 @@ MultiZonePlatform.prototype.startUI=function() {
   this.requestServer = http.createServer(function (request, response) {
     //platform.log("serving",request.url);
     if (request.url.toLowerCase().indexOf("/status") == 0) {
+      var simple=(request.url.length>7);
       response.statusCode = 200;
       response.setHeader('Content-Type', 'text/json');
-      response.end(platform.getStatus());
+      response.end(platform.getStatus(simple));
     }
-    else if (request.url === "/" || request.url === "") {
+    else if (request.url === "/" || request.url === "" || request.url ==="/simple") {
       this.returnFileContents("/index.html", response);
     }
     else if (request.url.indexOf("/set/") == 0) {
@@ -188,7 +191,7 @@ MultiZonePlatform.prototype.setupGPIO=function() {
   }
 };
 MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
-  platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
+  //platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
   gpio.write(platform.relayPins[ Number(pin) - 1 ],val);
 };
 MultiZonePlatform.prototype.updateGPIO=function(zone, HeatCoolMode ,val){
@@ -197,12 +200,13 @@ MultiZonePlatform.prototype.updateGPIO=function(zone, HeatCoolMode ,val){
     if(HeatCoolMode==Characteristic.CurrentHeatingCoolingState.OFF){
       if(platform.zones[zone].relayPinCool)platform.writeGPIO(platform.zones[zone].relayPinCool,RELAY_OFF);
       if(platform.zones[zone].relayPinHeat)platform.writeGPIO(platform.zones[zone].relayPinHeat,RELAY_OFF);
-     // if(platform.zones[zone].relayPinFan)platform.writeGPIO(platform.zones[zone].relayPinFan,RELAY_OFF);
+      if(platform.zones[zone].relayPinFan)platform.writeGPIO(platform.zones[zone].relayPinFan,RELAY_OFF);
     }else if(HeatCoolMode==Characteristic.CurrentHeatingCoolingState.HEAT){
       if(platform.zones[zone].relayPinCool)platform.writeGPIO(platform.zones[zone].relayPinCool,RELAY_OFF);
       if(platform.zones[zone].relayPinHeat)platform.writeGPIO(platform.zones[zone].relayPinHeat,val?RELAY_ON:RELAY_OFF);
     }else if(HeatCoolMode==Characteristic.CurrentHeatingCoolingState.COOL){
       if(platform.zones[zone].relayPinCool)platform.writeGPIO(platform.zones[zone].relayPinCool,val?RELAY_ON:RELAY_OFF);
+      if(platform.zones[zone].relayPinCool)platform.writeGPIO(platform.zones[zone].relayPinFan,val?RELAY_ON:RELAY_OFF);
       if(platform.zones[zone].relayPinHeat)platform.writeGPIO(platform.zones[zone].relayPinHeat,RELAY_OFF);
     }else if(HeatCoolMode=="FAN"){
       //platform.log("Fan Pin=",platform.zones[zone].relayPinFan);
@@ -228,7 +232,7 @@ MultiZonePlatform.prototype.returnFileContents=function(url, response){
         }
       });
 };
-MultiZonePlatform.prototype.getStatus=function(){
+MultiZonePlatform.prototype.getStatus=function(simple){
   var retval={};
   //return retval;
   for (var zone in this.zones) {
@@ -245,9 +249,12 @@ MultiZonePlatform.prototype.getStatus=function(){
   }
   retval.zones=this.zones;
   retval.timestamp=new Date().toISOString();
+  retval.enviornment={'cpuTemp':platform.cpuTemp,'weatherData':platform.weatherData};
   var oldestDate=new Date(Date.now() - 24 * 3600 * 1000);
-  retval.furnaceLog=furnaceLog.filter(entry => Date.parse(entry.timestamp)>oldestDate);
-  retval.sensorLog=sensorLog.filter(entry => entry.timestamp ? Date.parse(entry.timestamp)>oldestDate : false);
+  if(!simple){
+    retval.furnaceLog=furnaceLog.filter(entry => Date.parse(entry.timestamp)>oldestDate);
+    retval.sensorLog=sensorLog.filter(entry => entry.timestamp ? Date.parse(entry.timestamp)>oldestDate : false);
+  }
   return JSON.stringify(retval);
 };
 MultiZonePlatform.prototype.setTemperature=function(zone, HCState, temp){
@@ -264,9 +271,20 @@ MultiZonePlatform.prototype.setTemperature=function(zone, HCState, temp){
   //}
 };
 MultiZonePlatform.prototype.startSensorLoops=function(){
-  if (platform.hasBME280) {
-    this.sensorInterval=setInterval(this.readTemperatureFromI2C,this.sensorCheckMilliseconds); 
-  }
+  this.sensorInterval=setInterval(
+      function(){
+        if(platform.hasBME280) {
+          platform.readTemperatureFromI2C();
+        }      
+        if(platform.environmentCountdown){
+          platform.environmentCountdown--;
+        }else{
+          platform.environmentCountdown=60;
+          platform.readCPUTemperature();
+          platform.readLocalWeather();
+        }
+      }
+      ,this.sensorCheckMilliseconds);
   var port = new SerialPort(this.serialPort, this.serialCfg);
   platform.msgbuff="";
   port.on('error',function(err){
@@ -298,14 +316,49 @@ MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
 MultiZonePlatform.prototype.readCPUTemperature = function(){
   fs.readFile("/sys/class/thermal/thermal_zone0/temp", function (err, data) {
         if (err) {
-          console.log("error", "cannot read CPU Temp", err);
+          platform.log("error", "cannot read CPU Temp", err);
         }else{
-          platform.updateSensorData('CPU', { 'temp' : data/1000 }); 
-          //platform.cpuTemp=data/1000;
+          //platform.updateSensorData('CPU', { 'temp' : data/1000 }); 
+          platform.cpuTemp=data/1000;
           //platform.log("CPU Temp", platform.cpuTemp);
         }
       });
 };
+MultiZonePlatform.prototype.readLocalWeather = function(){
+    var options = {
+        host :  'rss.accuweather.com',
+        port : 80,
+        path : '/rss/liveweather_rss.asp?metric=0&locCode=US|44022',
+        method : 'GET'
+    }
+ 
+    //making the http get call
+    var getReq = http.request(options, function(res) {
+        //console.log("\nstatus code: ", res.statusCode);
+        var body='';
+        res.on('data', function(data) {
+          body+=data;
+        });
+        res.on('end', function(){
+          var regex=/Currently:([^:]*):([^<]*)/gm;
+          var m = regex.exec(body);
+          if(m && m.length==3){
+            platform.weatherData={
+              'condition':m[1].trim(),
+              'temp':m[2].trim()
+            };
+          }
+          //console.log("ended");
+        });
+    });
+ 
+    //end the request
+    getReq.end();
+    getReq.on('error', function(err){
+        platform.log("Error: ", err);
+    }); 
+};
+
 MultiZonePlatform.prototype.getZoneForDevice=function(deviceid){
   for(var zone in this.zones){
     if(this.zones[zone].sensors[deviceid])return zone;

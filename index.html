@@ -4,15 +4,19 @@
 <head>
 	<link rel="stylesheet" type="text/css" href="index.css">
 	<link rel="stylesheet" type="text/css" href="node_modules/css-toggle-switch/dist/toggle-switch.css">
-	<script src="jquery.min.js"></script>
-	<script src="Chart.bundle.min.js"></script>
+	<script src="node_modules/jquery/dist/jquery.min.js"></script>
+	<script src="node_modules/chart.js/dist/Chart.bundle.min.js"></script>
 </head>
 
 <body>
-		<a class="weatherwidget-io" href="https://forecast7.com/en/41d43n81d39/chagrin-falls/?unit=us" data-label_1="CHAGRIN FALLS" data-label_2="WEATHER" data-theme="weather_one" >CHAGRIN FALLS WEATHER</a>
-		<script>
-		!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src='https://weatherwidget.io/js/widget.min.js';fjs.parentNode.insertBefore(js,fjs);}}(document,'script','weatherwidget-io-js');
-		</script>
+<div class="header">
+	<div class="date" id="dateTime">
+		
+	</div>
+	<div class="crop">
+		<img id="weatherImage" src="https://www.theweather.com/wimages/foto15fa0abfd5f8c90c01e46ef929613e7e.png"/>
+	</div>
+</div>
 	<div id="scrolableWrapper" class="scrolableWrapper">
 		<div id="main" class="main">
 			LOADING...
@@ -27,6 +31,7 @@
 	</div>
 	<script>
 		var mock = window.mockdata != undefined;
+		var simple = window.location.href.indexOf("simple")>0;
 		var refreshTimer;
 		var dataCache = null;
 		var dataUpdate = {};
@@ -90,6 +95,10 @@
 			return (temperatureDisplayUnits == "F" ? ((temp - 32) * 5 / 9).toFixed(2) : temp);
 		}
 		function displayData(data) {
+			var d=new Date();
+			var months=["Jan","Feb","March","April","May", "June","July","Aug","Sept","Oct","Nov", "Dec"];
+			var dayOfWeek=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+			$("#dateTime").html('<p><span class="day">'+dayOfWeek[d.getDay()]+'</span>'+d.getDate()+'<span class="month">'+months[d.getMonth()]+'</span><span class="weather">'+dataCache.enviornment.weatherData.condition + " " + dataCache.enviornment.weatherData.temp+'</span></p>');
 			$("#data").text("OK - " + new Date().toString());
 			$("#main").html("");
 			// keep all thermostats in the same mode?
@@ -115,7 +124,7 @@
 					//' <input id="checkbox.'+zone+'" type="checkbox" onclick="turnOnOff(this)" ' + (onOff?'checked':'') +'/>' +
 					//' <span class="slider round"></span>' +
 					//'</label>' + 
-					zone + '</div>' +
+					data[zone].name + '</div>' +
 					'<div class="tempRun' + running + '">' + Math.round(currentTemp) + '</div>' +
 					'<div class="ctrl">' +
 					'<button class="button" onclick="buttonClick(' + "'" + zone + ".+'" + ')">+</button>' +
@@ -124,12 +133,14 @@
 					'</div><div class="runmode">' +
 					'<fieldset style="padding:0px;">' +
 					'	<div class="switch-toggle">' +
+						(data[zone].relayPinCool ? 
 					'		<input id="cool.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="COOL" ' + (runmode=='COOL'?'checked':'') + '>' +
-					'		<label for="cool.'+zone+'" >Cool</label>' +
+					'		<label for="cool.'+zone+'" >Cool</label>' : '' ) +
 					'		<input id="off.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="OFF" ' + (runmode=='OFF'?'checked':'') + '>' +
 					'		<label for="off.'+zone+'" >Off</label>' +
+						(data[zone].relayPinHeat ?
 					'		<input id="heat.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="HEAT" ' + (runmode=='HEAT'?'checked':'') + '>' +
-					'		<label for="heat.'+zone+'" >Heat</label>' +
+					'		<label for="heat.'+zone+'" >Heat</label>' : '' ) +
 					'		<a></a>' +
 					'	</div>' +
 					'</fieldset></div>' +
@@ -214,7 +225,7 @@
 				if (!mock) {
 					$.ajax({
 						type: 'GET',
-						url: '/status',
+						url: (simple?'/status?simple=1':'/status' )  ,
 						error: function (err) {
 							$("#data").text("Error on GET - " + new Date().toString());
 							console.log(JSON.stringify(err));
@@ -232,8 +243,8 @@
 					displayData(window.mockdata.zones);
 					drawGraph(window.mockdata);
 				}
-				if (currentRefreshInterval < 15000) {
-					startInterval(15000);
+				if (currentRefreshInterval < 30000) {
+					startInterval(30000);
 				}
 			}
 		}
@@ -294,15 +305,21 @@
             ));
             return config;
         }
-		function startInterval(timeout) {
-			if (refreshTimer) clearInterval(refreshTimer);
-			refreshTimer = null;
-			currentRefreshInterval = (Number(timeout) > 3000) ? Number(timeout) : 3000;
-			//console.log("Wait " + currentRefreshInterval);
-			
-			refreshTimer = setInterval(moveData, currentRefreshInterval);
-		}
-		$(startInterval);
+	function reload(){
+		document.location.reload();
+	}
+	function startup(){
+		setTimeout(reload,900000);
+		startInterval();
+	}
+	function startInterval(timeout) {
+		if (refreshTimer) clearInterval(refreshTimer);
+		refreshTimer = null;
+		currentRefreshInterval = (Number(timeout) > 3000) ? Number(timeout) : 3000;
+		//console.log("Wait " + currentRefreshInterval);
+		refreshTimer = setInterval(moveData, currentRefreshInterval);
+	}
+	$(startup);
 	</script>
 </body>
 

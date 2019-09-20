@@ -1,10 +1,111 @@
+::-webkit-scrollbar { 
+    display: none; 
+}
 body{
 	font-family: "Helvetica";
 	background-color: black;
 	color: white;
-	overflow: auto;
 	padding: 0px; 
 	margin:0px;
+}
+.header{
+	margin:0;
+	padding: 0;
+}
+.date {
+	margin: 0;
+	padding: 0;
+	float: left;
+	line-height: 1;
+	width: 110px;
+	height: 123px;
+	background: lightgray;
+	background: linear-gradient(top, #dadada 0%, #adadad 100%);
+	background: -moz-linear-gradient(top, #dadada 0%, #adadad 100%);
+	background: -webkit-linear-gradient(top, #dadada 0%, #adadad 100%);
+	border: 1px solid #d2d2d2;
+	border-radius: 10px;
+	-moz-border-radius: 10px;
+	-webkit-border-radius: 10px;
+	box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+	-moz-box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+	-webkit-box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+}
+
+.date p {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	font-family: Helvetica, sans-serif;
+	font-size: 42px;
+	text-align: center;
+	color: black;
+}
+
+.date p span.month {
+	margin: 0;
+	background: #d10000;
+	background: linear-gradient(top, #d10000 0%, #7a0909 100%);
+	background: -moz-linear-gradient(top, #d10000 0%, #7a0909 100%);
+	background: -webkit-linear-gradient(top, #d10000 0%, #7a0909 100%);
+	font-size: 12px;
+	font-weight: bold;
+	color: #fff;
+	text-transform: uppercase;
+	display: block;
+	border-top: 3px solid #a13838;
+	padding: 6px 0 6px 0;
+}
+.date p span.day {
+	margin 0;
+	background:white;
+	border-bottom: 3px solid #9e9e9e;
+	border-radius: 10px 10px 0 0;
+	font-size:12px;
+	text-transform: uppercase;
+	color:black;
+	display:block;
+	padding: 6px 0 6px 0;
+	
+}
+.date p span.weather {
+	margin: 0;
+	background:green;
+	background: linear-gradient(top, #00d123 0%, #097a54 100%);
+	background: -moz-linear-gradient(top, #00d123 0%, #097a54 100%);
+	background: -webkit-linear-gradient(top, #00d123 0%, #097a54 100%);
+	font-size: 12px;
+	font-weight: bold;
+	color: #fff;
+	
+	display: block;
+	border-top: 3px solid #097a54;
+	border-radius: 0 0 10px 10px;
+	-moz-border-radius: 0 0 10px 10px;
+	-webkit-border-radius: 0 0 10px 10px;
+	padding: 6px 0 6px 0;
+}
+
+@-moz-document url-prefix() {
+	.date {
+		padding: 16px 0 0 0;
+	}
+
+	.date p span {
+		padding: 9px 0 3px 0;
+	}
+}
+.crop{
+	margin: auto;
+	max-width: 706px;
+	width: 83%;
+    height: 128px;
+    overflow: hidden;
+}
+.crop img {
+    width: 100%;
+    height: 172px;
+	margin: -24px auto;
 }
 div.h3{
 	width: 100%;
@@ -18,18 +119,16 @@ div.main{
 	margin: 0px 0px 0px 0px;
 }
 div.scrolableWrapper{
-	overflow-x: hidden;
-	overflow-y: auto;
+	overflow-y: scroll;
+	padding-left: 20px;
 }
 div.zone{
-	width: 32%;
-	
+	width: 32%;	
 	background-color: black;
 	color: white;
 	float: left;
 	padding: 0px 0px 0px 0px;
-	margin: 0px 0px 0px 0px;
-	
+	margin: 0px 0px 0px 0px;	
 }
 div.tempRunOFF{
 	color: white;
@@ -138,6 +237,7 @@ div.chart{
 	-ms-user-select: none;
 }
 div.runmode{
+	padding-left:20px;
 	width:85%;
 	margin: 10px;
 	float:left;

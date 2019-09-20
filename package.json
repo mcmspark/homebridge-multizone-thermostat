@@ -1,34 +1,65 @@
 {
-  "name": "homebridge-multizone-thermostat",
-  "version": "5.1.0",
+  "_from": "homebridge-multizone-thermostat",
+  "_id": "homebridge-multizone-thermostat@4.3.0",
+  "_inBundle": false,
+  "_integrity": "sha512-i9OP04Esl8E6HjeSbskNwCFL6MB0+lU3+aBnco/DVLfp0tDeqBMB6BEmJbvJdQgti/tOjPvP87Ww38mR8UTIGw==",
+  "_location": "/homebridge-multizone-thermostat",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "homebridge-multizone-thermostat",
+    "name": "homebridge-multizone-thermostat",
+    "escapedName": "homebridge-multizone-thermostat",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER",
+    "/"
+  ],
+  "_resolved": "https://registry.npmjs.org/homebridge-multizone-thermostat/-/homebridge-multizone-thermostat-4.3.0.tgz",
+  "_shasum": "07d27d667af15bb5ac843665de59e4edd2212912",
+  "_spec": "homebridge-multizone-thermostat",
+  "_where": "/home/pi",
+  "author": {
+    "name": "mcmspark",
+    "email": "mcmspark@hotmail.com",
+    "url": "http://github.com/mcmspark"
+  },
+  "bugs": {
+    "url": "https://github.com/mcmspark/homebridge-multizone-thermostat/issues"
+  },
+  "bundleDependencies": false,
+  "dependencies": {
+    "chart.js": "^2.7.3",
+    "css-toggle-switch": "^4.1.0",
+    "jquery": "^3.4.1",
+    "mime": "^2.4.0"
+  },
+  "deprecated": false,
   "description": "A homebridge platform that adds multiple zone thermostats",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mcmspark/homebridge-multizone-thermostat.git"
-  },
   "engines": {
     "homebridge": ">=0.4.33",
     "node": ">=6.12.2"
   },
+  "homepage": "https://github.com/mcmspark/homebridge-multizone-thermostat#readme",
   "keywords": [
     "homebridge-plugin",
     "thermostat",
     "raspberry-pi",
     "homebridge"
   ],
-  "author": "mcmspark <mcmspark@hotmail.com> (http://github.com/mcmspark)",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/mcmspark/homebridge-multizone-thermostat/issues"
+  "main": "index.js",
+  "name": "homebridge-multizone-thermostat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mcmspark/homebridge-multizone-thermostat.git"
   },
-  "homepage": "https://github.com/mcmspark/homebridge-multizone-thermostat#readme",
-  "dependencies": {
-    "chart.js": "^2.7.3",
-    "css-toggle-switch": "^4.1.0",
-    "mime": "^2.4.0"
-  }
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "4.3.0"
 }
