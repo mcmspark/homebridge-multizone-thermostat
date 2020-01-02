@@ -109,6 +109,10 @@ function MultiZonePlatform(log, config, api) {
   this.serialPort = config.serialPort || '/dev/serial0';
   this.serialCfg = config.serialCfg || { baudRate : 9600 };
   this.hasBME280 = config.hasBME280;
+  this.alarmTemp = config.alarmTemp;
+  this.alarmKey = config.alarmKey;
+  this.alarmSecret = config.alarmSecret;
+  this.alarmTopic = config.alarmTopic; 
   this.cpuTemp=20.0;
   this.weatherData={'condition':'','temp':''};
   this.setupGPIO();
@@ -189,6 +193,20 @@ MultiZonePlatform.prototype.setupGPIO=function() {
   catch (err) {
     platform.log('error ln207', JSON.stringify(err));
   }
+};
+MultiZonePlatform.prototype.sendSNSMessage=function(message){
+  var AWS = require('aws-sdk'); 
+  AWS.config.update({region: 'us-east-1'}); 
+  var sns=new AWS.SNS(
+    {accessKeyId:platform.alarmKey,
+    secretAccessKey:platform.alarmSecret});
+  var params = {
+    Message: message,
+    TopicArn: platform.alarmTopic
+  };
+  sns.publish(params, function(err, data) {
+    if (err) platform.log(err, err.stack);
+  });
 };
 MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
   //platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
@@ -275,7 +293,7 @@ MultiZonePlatform.prototype.startSensorLoops=function(){
       function(){
         if(platform.hasBME280) {
           platform.readTemperatureFromI2C();
-        }      
+        }
         if(platform.environmentCountdown){
           platform.environmentCountdown--;
         }else{
@@ -373,10 +391,10 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   sensorLog.push(logdata);
   var zone = this.getZoneForDevice(deviceid);
   if(!zone){
-    for(var zone in this.zones){
-      this.zones[zone][deviceid]=data;
+    //for(var zone in this.zones){
+    //  this.zones[zone].sensors[deviceid]=data;
       return;
-    }
+    //}
   }
   //platform.log("zone", zone," device", deviceid);
   // write the data on the zones object
@@ -451,7 +469,8 @@ MultiZonePlatform.prototype.setCharacteristics = function(service,deviceid,data)
       case 'temp':  
         if(this.testCharacteristic(service,Characteristic.CurrentTemperature))
         {
-          if(service.displayName.indexOf("Thermostat")){
+          //if(service instanceof Service.Thermostat){
+          if(service.displayName.indexOf("Thermostat")>0){
             var zone = this.getZoneForDevice(deviceid);
             service.setCharacteristic(Characteristic.CurrentTemperature,this.getAverageSensor(zone,dataType));
           }
@@ -463,10 +482,13 @@ MultiZonePlatform.prototype.setCharacteristics = function(service,deviceid,data)
         if(this.testCharacteristic(service,Characteristic.BatteryLevel))
         {
           var val=(Number(data[dataType])-2)*100;
-          if(service.displayName.indexOf("Thermostat")){
+          //if(service instanceof Service.Thermostat){
+          if(service.displayName.indexOf("Thermostat")>0){
             var zone = this.getZoneForDevice(deviceid);
             val=(this.getMinimumSensor(zone,dataType)-2)*100;
           }
+          if(val<1.0)val=1.0;
+          //platform.log(service.displayName,"batteryLevel:",val,"from reading",data[dataType]);
           service.setCharacteristic(Characteristic.BatteryLevel,val);
           service.setCharacteristic(Characteristic.StatusLowBattery,val<30);
         }
@@ -736,12 +758,7 @@ MultiZonePlatform.prototype.turnOffSystem=function(zone, service, systemToTurnOf
   this.lastCurrentHeatingCoolingStateChangeTime=new Date();
 };  
 MultiZonePlatform.prototype.updateSystem=function(){
-  //platform.log("updating...",service.displayName, service.timeSinceLastHeatingCoolingStateChange() , service.minOnOffTime);  
-  //if (service.timeSinceLastHeatingCoolingStateChange() < service.minOnOffTime) {
-  //  var waitTime = service.minOnOffTime - service.timeSinceLastHeatingCoolingStateChange();
-    //platform.log("INFO Need to wait",waitTime / 1000,"second(s) before state changes.",service.displayName);
-  //  return;
-  //}
+  //platform.log("updating...");  
   var changed=false;
   for(var zone in platform.zones){
     var service=platform.getThermostatForZone(zone);
@@ -799,6 +816,19 @@ MultiZonePlatform.prototype.updateSystem=function(){
   if(changed){
     platform.lastCurrentHeatingCoolingStateChangeTime=new Date();
     //platform.log("reset timer");
+  }
+  //platform.log("check for alarms");
+  // send alarm message if temp is low
+  for(var zone in platform.zones){
+	//platform.log(zone);
+	for(var deviceid in platform.zones[zone].sensors){
+      		var temp=platform.zones[zone].sensors[deviceid].temp;
+		//platform.log("check for alarm",deviceid,temp,platform.alarmTemp);
+		if(temp && temp<platform.alarmTemp){
+			platform.log("LOW TEMP ALARM", deviceid);
+			platform.sendSNSMessage("ALARM Temp:"+deviceid+"="+(temp*9/5+32)+"F");
+		}
+	}
   }
 };
 MultiZonePlatform.prototype.startControlLoop=function(){
