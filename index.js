@@ -113,6 +113,10 @@ function MultiZonePlatform(log, config, api) {
   this.alarmKey = config.alarmKey;
   this.alarmSecret = config.alarmSecret;
   this.alarmTopic = config.alarmTopic; 
+  this.reasonableTemperatures = config.reasonableTemperatures || [
+    {"units":"celsius", "low":10, "high":40 },
+    {"units":"fahrenheit", "low":50, "high":104 }
+  ];
   this.cpuTemp=20.0;
   this.weatherData={'condition':'','temp':''};
   this.setupGPIO();
@@ -661,7 +665,26 @@ MultiZonePlatform.prototype.makeThermostat=function(accessory){
       accessory.thermostatService=accessory.addService(Service.Thermostat, accessory.displayName);
       platform.log("added ThermostatService");
     }
-  
+    //override targetTemp characteristic
+  var characteristic=accessory.thermostatService.getCharacteristic(Characteristic.TargetTemperature);
+  characteristic.validateValue = (temp) => {
+    // check that the temp is reasonable for the units (default assumed to be celsius
+    if(temp>=platform.reasonableTemperatures[1].low && temp<=platform.reasonableTemperatures[1].high){
+       // this is the reasonable range for the fahrenheit scale
+       // convert to celsius
+       temp=(Number(temp)-32)*5/9;
+    }
+    if(temp>=platform.reasonableTemperatures[0].low && temp<=platform.reasonableTemperatures[0].high){
+       // this is the reasonable range for the celsius scale
+       return Math.round( Number(temp)*10 )/10;
+    }
+    return 21
+  };
+  //characteristic.props.maxValue=37.8;
+  characteristic.on('set', (temp, callback, context) => {
+    platform.log('SET TargetTemperature from', characteristic.value, 'to', temp);
+    callback(null,temp);
+  });
   for(var d in platform.zones[zone]["sensors"]){
     var sensor=platform.zones[zone]["sensors"][d];
     if(sensor['extras'].indexOf('press')>=0){
