@@ -4,7 +4,12 @@
 <head>
 	<link rel="stylesheet" type="text/css" href="index.css">
 	<link rel="stylesheet" type="text/css" href="node_modules/css-toggle-switch/dist/toggle-switch.css">
+
 	<script src="node_modules/jquery/dist/jquery.min.js"></script>
+<!--
+	<script src="jquery.min.js"></script>
+	<script src="mockstatus.json"></script>
+ -->
 	<script src="node_modules/chart.js/dist/Chart.bundle.min.js"></script>
 </head>
 
@@ -14,7 +19,51 @@
 		
 	</div>
 	<div class="crop">
-		<img id="weatherImage" src="https://www.theweather.com/wimages/foto15fa0abfd5f8c90c01e46ef929613e7e.png"/>
+		<img id="weatherImage" onclick="location.reload()" src="https://www.theweather.com/wimages/foto15fa0abfd5f8c90c01e46ef929613e7e.png"/>
+	</div>
+	<div class="clock">
+	<svg xmlns="http://www.w3.org/2000/svg" version="1.1" style="width:123px;height:123px;background-color:#000000" viewBox="-1 -1 2 2"  stroke="none" fill="none">
+	<defs>
+		<circle id="hour-mark" cx="0" cy="-0.85" r="0.04"/>
+	</defs>
+	<g id="hour-marks" fill="#FFFFFF"/>
+	
+	<g id="hands" stroke="#FFFFFF" stroke-linecap="round" style="display:none">
+		<line id="hour-hand"   x1="0" y1="0" x2="0" y2="-0.50" stroke-width="0.11"/>
+		<line id="minute-hand" x1="0" y1="0" x2="0" y2="-0.75" stroke-width="0.07"/>
+	</g>
+	
+	
+	<script type="application/javascript">
+	
+	
+	function initialize() {
+		for (var i = 0; i < 12; i++) {
+			var elem = document.getElementById("hour-marks").appendChild(
+				document.createElementNS("http://www.w3.org/2000/svg", "use"));
+			elem.setAttribute("href", "#hour-mark");
+			rotateElem(elem, i / 12 * 360);
+		}
+		updateClock();
+		document.getElementById("hands").removeAttribute("style");
+	}
+	
+	function updateClock() {
+		var d = new Date();
+		rotateElem(document.getElementById("hour-hand"), 
+			(d.getHours() + d.getMinutes() / 60) / 12 * 360);
+		rotateElem(document.getElementById("minute-hand"),
+			d.getMinutes() / 60 * 360);
+		setTimeout(updateClock, 60000 - d.getTime() % 60000 + 100);
+	}
+	
+	function rotateElem(elem, degrees) {
+		elem.setAttribute("transform", "rotate(" + degrees + ")");
+	}
+	
+	initialize();
+	</script>
+	</svg>
 	</div>
 </div>
 	<div id="scrolableWrapper" class="scrolableWrapper">
@@ -27,7 +76,6 @@
 			<canvas id="pressCanvas" class="canvas" height="50"></canvas>
 		</div>
 		<div id="data" class="stat"></div>
-		<div class="stat"><a href=".">reload</a></div>
 	</div>
 	<script>
 		var mock = window.mockdata != undefined;
@@ -99,8 +147,9 @@
 			var months=["Jan","Feb","March","April","May", "June","July","Aug","Sept","Oct","Nov", "Dec"];
 			var dayOfWeek=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
 			$("#dateTime").html('<p><span class="day">'+dayOfWeek[d.getDay()]+'</span>'+d.getDate()+'<span class="month">'+months[d.getMonth()]+'</span><span class="weather">'+dataCache.enviornment.weatherData.condition + " " + dataCache.enviornment.weatherData.temp+'</span></p>');
-			$("#data").text("OK - " + new Date().toString());
+			//$("#data").text("OK - " + new Date().toString());
 			$("#main").html("");
+			if(simple)$("body").css("overflow", "hidden");
 			// keep all thermostats in the same mode?
 			var runmode='';
 			for (var zone in data) {
@@ -149,6 +198,7 @@
 			}
 		}
 		function drawGraph(statusData) {
+			if(simple)return;
 			var timeFormat = 'MM/DD/YYYY HH:mm';
 			
 			window.chartColors = {
@@ -176,7 +226,7 @@
 			};
 			var minDate = new Date(864000000000000);
 			var maxDate = new Date(-864000000000000);
-			statusData.sensorLog.forEach(o => {
+			statusData.sensorLog.forEach(function(o){
 				var ts = Date.parse(o.timestamp);
 				if (ts < minDate) minDate = ts;
 				if (ts > maxDate) maxDate = ts;
@@ -184,8 +234,8 @@
 			);
 			var pressconfig, tempconfig, fconfig;
 
-            tempconfig = BuildChartConfig(tempconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AH'], "", "temp", undefined, undefined, false, v => v*9/5+32);
-            fconfig = BuildChartConfig(fconfig, statusData.furnaceLog, minDate, maxDate, "zone", ['1', '2', '3'], "Zone", "run", ["ON", "OFF"], "category", true, v => v?"ON":"OFF");
+            tempconfig = BuildChartConfig(tempconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AH'], "", "temp", undefined, undefined, false, function(v){return v*9/5+32});
+            fconfig = BuildChartConfig(fconfig, statusData.furnaceLog, minDate, maxDate, "zone", ['1', '2', '3'], "Zone", "run", ["ON", "OFF"], "category", true, function(v){return v?"ON":"OFF"});
             pressconfig = BuildChartConfig(pressconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['BM'], "", "press");
 
 
@@ -253,7 +303,7 @@
 			var linedata=[];
             //console.log("valueConversion "+valueConversion);
             //data = JSON.parse(JSON.stringify(data));
-            data.forEach(o => {
+            data.forEach(function(o){
                 if (o.timestamp && (o[yAxisKey] !== undefined)){
                     var item={
                         x: o.timestamp,
@@ -292,7 +342,7 @@
             };
             if (yAxisLabels) config.data.yLabels = yAxisLabels;
             if (yAxisType) config.options.scales.yAxes[0].type = yAxisType;
-            keyvalues.forEach(z => config.data.datasets.push(
+            keyvalues.forEach(function(z){ config.data.datasets.push(
                 {
                     label: keylabel + z,
                     backgroundColor: color(window.chartColors[z]).alpha(0.5).rgbString(),
@@ -300,9 +350,9 @@
                     fill: false,
                     pointRadius: 1,
                     steppedLine: steppedLine || false,
-                    data: linedata.filter(o => o[datasetKey] == z),
+                    data: linedata.filter( function(o){ return (o[datasetKey] == z);})
                 }
-            ));
+            )});
             return config;
         }
 	function reload(){
@@ -310,12 +360,12 @@
 	}
 	function startup(){
 		setTimeout(reload,900000);
-		startInterval();
+		startInterval(500);
 	}
 	function startInterval(timeout) {
 		if (refreshTimer) clearInterval(refreshTimer);
 		refreshTimer = null;
-		currentRefreshInterval = (Number(timeout) > 3000) ? Number(timeout) : 3000;
+		currentRefreshInterval = (Number(timeout) > 500) ? Number(timeout) : 500;
 		//console.log("Wait " + currentRefreshInterval);
 		refreshTimer = setInterval(moveData, currentRefreshInterval);
 	}

@@ -8,9 +8,12 @@ body{
 	padding: 0px; 
 	margin:0px;
 }
-.header{
+div.header{
 	margin:0;
 	padding: 0;
+	width:100%;
+	height:128px;
+	overflow:hidden;
 }
 .date {
 	margin: 0;
@@ -57,7 +60,7 @@ body{
 	padding: 6px 0 6px 0;
 }
 .date p span.day {
-	margin 0;
+	margin: 0;
 	background:white;
 	border-bottom: 3px solid #9e9e9e;
 	border-radius: 10px 10px 0 0;
@@ -101,11 +104,19 @@ body{
 	width: 83%;
     height: 128px;
     overflow: hidden;
+    float:left;
 }
 .crop img {
     width: 100%;
     height: 172px;
 	margin: -24px auto;
+}
+div.clock{
+	margin: 0;
+	padding: 0;
+	float: right;
+	width:123px;
+	height:123px;
 }
 div.h3{
 	width: 100%;
@@ -246,4 +257,5 @@ div.runmode{
 input[id^="heat"]:checked ~ a {background-color:orange}
 input[id^="cool"]:checked ~ a {background-color:cornflowerblue}
 input[id^="off"]:checked ~ a {background-color:slategray}
+
 

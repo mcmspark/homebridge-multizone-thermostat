@@ -109,14 +109,12 @@ function MultiZonePlatform(log, config, api) {
   this.serialPort = config.serialPort || '/dev/serial0';
   this.serialCfg = config.serialCfg || { baudRate : 9600 };
   this.hasBME280 = config.hasBME280;
+  this.remoteBME280URL=config.remoteBME280URL || ("http:/"+"/greenhouse.local:8080/measure");
   this.alarmTemp = config.alarmTemp;
   this.alarmKey = config.alarmKey;
   this.alarmSecret = config.alarmSecret;
   this.alarmTopic = config.alarmTopic; 
-  this.reasonableTemperatures = config.reasonableTemperatures || [
-    {"units":"celsius", "low":10, "high":40 },
-    {"units":"fahrenheit", "low":50, "high":104 }
-  ];
+  this.reasonableTemperatures = config.reasonableTemperatures;
   this.cpuTemp=20.0;
   this.weatherData={'condition':'','temp':''};
   this.setupGPIO();
@@ -298,6 +296,9 @@ MultiZonePlatform.prototype.startSensorLoops=function(){
         if(platform.hasBME280) {
           platform.readTemperatureFromI2C();
         }
+        if(platform.remoteBME280URL){
+          platform.readRemoteBME280();
+        }
         if(platform.environmentCountdown){
           platform.environmentCountdown--;
         }else{
@@ -324,7 +325,10 @@ MultiZonePlatform.prototype.startSensorLoops=function(){
       var deviceid=msg.substr(1,2);
       var type=msg.substr(3,4);
       if(type=="TEMP"){platform.updateSensorData(deviceid,{ "temp" : Number(msg.substr(7)) });}
-      if(type=="BATT"){platform.updateSensorData(deviceid,{ "batt" : Number(msg.substr(7,4)) });}
+      if(type=="BATT"){
+	var val=(Number(msg.substr(7,4))-2)*100;
+	platform.updateSensorData(deviceid,{ "batt" : val });
+	}
     }
   });
 };
@@ -335,6 +339,29 @@ MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
     });
   }catch(err){platform.log('error ln292',err);}
 };
+MultiZonePlatform.prototype.readRemoteBME280 = function(){
+  var getReq = http.request(platform.remoteBME280URL, function(res) {
+      var body='';
+      res.on('data', function(data) {
+        body+=data;
+      });
+      res.on('end', function(){
+        try{
+          var sensorData=JSON.parse(body);
+          platform.updateSensorData('BMR', { 'temp' : sensorData.temp, 'press' : sensorData.press, 'humid' : sensorData.humid, 'batt': sensorData.batt });
+        }catch(err){
+          platform.log("unable to reach BME");
+        }
+      });
+  });
+
+  //end the request
+  getReq.end();
+  getReq.on('error', function(err){
+      platform.log("Error: ", err);
+  });
+};
+
 MultiZonePlatform.prototype.readCPUTemperature = function(){
   fs.readFile("/sys/class/thermal/thermal_zone0/temp", function (err, data) {
         if (err) {
@@ -395,18 +422,29 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   sensorLog.push(logdata);
   var zone = this.getZoneForDevice(deviceid);
   if(!zone){
-    //for(var zone in this.zones){
-    //  this.zones[zone].sensors[deviceid]=data;
-      return;
-    //}
+    this.addAccessory(deviceid);
+    for(var i in this.accessories){
+      var accessory=this.accessories[i];
+      if(accessory.displayName==deviceid){
+        var svc=accessory.getService(Service.TemperatureSensor);
+        this.setCharacteristics(svc,deviceid,data);
+        svc=accessory.getService(Service.BatteryService);
+        this.setCharacteristics(svc,deviceid,data);
+      }
+    }
+    return;
   }
   //platform.log("zone", zone," device", deviceid);
   // write the data on the zones object
-  var timestamp=new Date().toString();
-  for(var val in data){
-    this.zones[zone].sensors[deviceid][val]=data[val];
-    this.zones[zone].sensors[deviceid]['timestamp']=timestamp;
-  }
+    var timestamp=new Date().toString();
+    for(var val in data){
+      this.zones[zone].sensors[deviceid][val]=data[val];
+      this.zones[zone].sensors[deviceid]['timestamp']=timestamp;
+    }
+  //}else{
+  //  zone="1";
+  //}
+
   // set the characteristics
   var foundAccessories = 0;
   for(var i in this.accessories){
@@ -482,16 +520,16 @@ MultiZonePlatform.prototype.setCharacteristics = function(service,deviceid,data)
             service.setCharacteristic(Characteristic.CurrentTemperature,Number(data[dataType]));
         }
         break;
-      case 'batt':  
+      case 'batt':
         if(this.testCharacteristic(service,Characteristic.BatteryLevel))
         {
-          var val=(Number(data[dataType])-2)*100;
+          var val=Number(data[dataType]);
           //if(service instanceof Service.Thermostat){
           if(service.displayName.indexOf("Thermostat")>0){
             var zone = this.getZoneForDevice(deviceid);
-            val=(this.getMinimumSensor(zone,dataType)-2)*100;
+            val=this.getMinimumSensor(zone,dataType);
           }
-          if(val<1.0)val=1.0;
+          if(val<0.0)val=0.0;
           //platform.log(service.displayName,"batteryLevel:",val,"from reading",data[dataType]);
           service.setCharacteristic(Characteristic.BatteryLevel,val);
           service.setCharacteristic(Characteristic.StatusLowBattery,val<30);
@@ -531,6 +569,10 @@ MultiZonePlatform.prototype.addAccessoriesForSensor = function(deviceid){
       //create a thermostat
       this.addAccessory("Zone"+zone+" Thermostat");
     }
+    else
+    {
+      this.addAccessory(deviceid);
+    }
   }
 };
 MultiZonePlatform.prototype.addAccessory = function(accessoryName) {
@@ -551,6 +593,7 @@ MultiZonePlatform.prototype.addAccessory = function(accessoryName) {
   });
 
   this.configureAccessory(accessory);
+
   var service=accessory.getService(Service.Thermostat);
   if(service){
     platform.log("set thermostat defaults")
@@ -647,6 +690,9 @@ MultiZonePlatform.prototype.makeTemperatureSensor=function(accessory){
   accessory.tempService=accessory.getService(Service.TemperatureSensor);
   if(accessory.tempService==undefined){
     accessory.tempService=accessory.addService(Service.TemperatureSensor, accessory.displayName);
+    if(accessory.displayName.indexOf('BM')==0){
+      accessory.tempService.addCharacteristic(AirPressure);
+    }
     platform.log("added TemperatureSensor");
   }
 };
@@ -671,6 +717,7 @@ MultiZonePlatform.prototype.makeThermostat=function(accessory){
     // check that the temp is reasonable for the units (default assumed to be celsius
     if(temp>=platform.reasonableTemperatures[1].low && temp<=platform.reasonableTemperatures[1].high){
        // this is the reasonable range for the fahrenheit scale
+	platform.log("get a request in Fahrenheit",temp,"converting to Celsius");
        // convert to celsius
        temp=(Number(temp)-32)*5/9;
     }
