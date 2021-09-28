@@ -76,17 +76,16 @@ module.exports = function(homebridge) {
   AirPressure = function() {
         Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
         this.setProps({
-          format: Characteristic.Formats.FLOAT,
-          unit: 'hectopascals',
-          minValue: 100,
-          maxValue: 120000,
-          minStep: 0.01,
+          format: Characteristic.Formats.UINT16,
+          unit: 'hPa',
+          minValue: 700,
+          maxValue: 1100,
+          minStep: 1,
           perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
         });
         //this.value = this.getDefaultValue();
   };
   AirPressure.prototype=Object.create(Characteristic.prototype);
-  AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
   
   // registerPlatform(pluginName, platformName, constructor, dynamic), dynamic must be true
   homebridge.registerPlatform("homebridge-multizone-thermostat", "MultiZonePlatform", MultiZonePlatform, true);
@@ -398,6 +397,9 @@ MultiZonePlatform.prototype.readLocalWeather = function(){
         res.on('data', function(data) {
           body+=data;
         });
+        res.on('error', function(err){
+          platform.log("cannot get weather data")
+        });
         res.on('end', function(){
           var regex=/Currently:([^:]*):([^<]*)/gm;
           var m = regex.exec(body);
@@ -555,7 +557,7 @@ MultiZonePlatform.prototype.setCharacteristics = function(service,deviceid,data)
       case 'press':
         if(this.testCharacteristic(service,AirPressure))
         {
-          //platform.log('set press');
+          //platform.log('set press', data[dataType], AirPressure);
           service.setCharacteristic(AirPressure,Number(data[dataType]));
         }
         break;
