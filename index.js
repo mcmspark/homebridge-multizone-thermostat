@@ -362,7 +362,7 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
   });
   //end the request
   getReq.end();
-  getReq.om('error', function(err){
+  getReq.on('error', function(err){
     platform.log("unable to reach remoteBME", err);
   });
 };
