@@ -1,7 +1,7 @@
 'use strict';
 var http = require('http');
 var gpio = require('rpi-gpio');
-var BME280 = require('node-adafruit-bme280');
+var BME280 = require('bme280-sensor');
 var SerialPort = require('serialport');
 var fs = require('fs');
 var path = require('path');
@@ -143,6 +143,12 @@ MultiZonePlatform.prototype.startup=function(){
     var filePath="status.json";
     status=JSON.parse(fs.readFileSync(filePath));
     platform.log(filePath, status.furnaceLog.length);
+    if(platform.hasBME280){
+      platform.bme280 = new BME280({i2cBusNo:1, i2cAddress: 0x76});
+      platform.bme280.init().then(() => {
+        platform.log("BME280 initialization successful");
+      });
+    }
   }catch(err){
     platform.log("cannot load status.json");
   }
@@ -334,8 +340,8 @@ MultiZonePlatform.prototype.startSensorLoops=function(){
 };
 MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
   try{
-    BME280.probe((temperature, pressure, humidity) => {
-        platform.updateSensorData('BM', { 'temp' : temperature-1.1111, 'press' : pressure, 'humid' : humidity });
+    platform.bme280.readSensorData().then((data) => {
+      platform.updateSensorData('BM', { 'temp' : data.temperature_C-1.1111, 'press' : data.pressure_hPa, 'humid' : data.humidity });
     });
   }catch(err){platform.log('error ln292',err);}
 };
@@ -345,6 +351,9 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
       res.on('data', function(data) {
         body+=data;
       });
+      res.om('error', function(err){
+        platform.log("unable to reach remoteBME", err);
+      });
       res.on('end', function(){
         try{
           var sensorData=JSON.parse(body);
@@ -353,6 +362,7 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
           platform.log("unable to reach BME");
         }
       });
+
   });
 
   //end the request
