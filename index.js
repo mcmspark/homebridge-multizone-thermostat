@@ -78,7 +78,7 @@ module.exports = function(homebridge) {
         this.setProps({
           format: Characteristic.Formats.FLOAT,
           unit: 'hectopascals',
-          minValue: 1000,
+          minValue: 100,
           maxValue: 120000,
           minStep: 0.01,
           perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
