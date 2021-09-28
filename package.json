@@ -1,6 +1,6 @@
 {
   "name": "homebridge-multizone-thermostat",
-  "version": "5.6.0",
+  "version": "5.6.1",
   "description": "A homebridge platform that adds multiple zone thermostats",
   "main": "index.js",
   "scripts": {

@@ -350,24 +350,20 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
       res.on('data', function(data) {
         body+=data;
       });
-      res.om('error', function(err){
-        platform.log("unable to reach remoteBME", err);
-      });
       res.on('end', function(){
         try{
           var sensorData=JSON.parse(body);
+          platform.log("Updated BMR", sensorData.temp);
           platform.updateSensorData('BMR', { 'temp' : sensorData.temp, 'press' : sensorData.press, 'humid' : sensorData.humid, 'batt': sensorData.batt });
         }catch(err){
           platform.log("unable to reach BME");
         }
       });
-
   });
-
   //end the request
   getReq.end();
-  getReq.on('error', function(err){
-      platform.log("Error: ", err);
+  getReq.om('error', function(err){
+    platform.log("unable to reach remoteBME", err);
   });
 };
 
@@ -397,9 +393,6 @@ MultiZonePlatform.prototype.readLocalWeather = function(){
         res.on('data', function(data) {
           body+=data;
         });
-        res.on('error', function(err){
-          platform.log("cannot get weather data")
-        });
         res.on('end', function(){
           var regex=/Currently:([^:]*):([^<]*)/gm;
           var m = regex.exec(body);
@@ -415,7 +408,7 @@ MultiZonePlatform.prototype.readLocalWeather = function(){
  
     //end the request
     getReq.end();
-    getReq.on('error', function(err){
+    getReq.on('cannot get weather data', function(err){
         platform.log("Error: ", err);
     }); 
 };
