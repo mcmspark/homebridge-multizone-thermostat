@@ -108,7 +108,8 @@ function MultiZonePlatform(log, config, api) {
   this.serialPort = config.serialPort || '/dev/serial0';
   this.serialCfg = config.serialCfg || { baudRate : 9600 };
   this.hasBME280 = config.hasBME280;
-  this.remoteBME280URL=config.remoteBME280URL || ("http:/"+"/greenhouse.local:8080/measure");
+  this.remoteBME280URL = config.remoteBME280URL;
+  this.accuweatherURL = config.accuweatherURL;
   this.alarmTemp = config.alarmTemp;
   this.alarmKey = config.alarmKey;
   this.alarmSecret = config.alarmSecret;
@@ -345,6 +346,7 @@ MultiZonePlatform.prototype.readTemperatureFromI2C = function() {
   }catch(err){platform.log('error ln292',err);}
 };
 MultiZonePlatform.prototype.readRemoteBME280 = function(){
+  if(!platform.remoteBME280URL){return;}
   var getReq = http.request(platform.remoteBME280URL, function(res) {
       var body='';
       res.on('data', function(data) {
@@ -353,7 +355,7 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
       res.on('end', function(){
         try{
           var sensorData=JSON.parse(body);
-          platform.log("Updated BMR", sensorData.temp);
+          //platform.log("Updated BMR", sensorData.temp);
           platform.updateSensorData('BMR', { 'temp' : sensorData.temp, 'press' : sensorData.press, 'humid' : sensorData.humid, 'batt': sensorData.batt });
         }catch(err){
           platform.log("unable to reach BME");
@@ -363,7 +365,7 @@ MultiZonePlatform.prototype.readRemoteBME280 = function(){
   //end the request
   getReq.end();
   getReq.on('error', function(err){
-    platform.log("unable to reach remoteBME", err);
+    platform.log("unable to reach remoteBME: ", err);
   });
 };
 
@@ -379,15 +381,16 @@ MultiZonePlatform.prototype.readCPUTemperature = function(){
       });
 };
 MultiZonePlatform.prototype.readLocalWeather = function(){
-    var options = {
-        host :  'rss.accuweather.com',
-        port : 80,
-        path : '/rss/liveweather_rss.asp?metric=0&locCode=US|44022',
-        method : 'GET'
-    }
+  if(!platform.accuweatherURL){return;}
+    // var options = {
+    //     host :  'rss.accuweather.com',
+    //     port : 80,
+    //     path : '/rss/liveweather_rss.asp?metric=0&locCode=US|44022',
+    //     method : 'GET'
+    // }
  
     //making the http get call
-    var getReq = http.request(options, function(res) {
+    var getReq = http.request(platform.accuweatherURL, function(res) {
         //console.log("\nstatus code: ", res.statusCode);
         var body='';
         res.on('data', function(data) {
@@ -408,8 +411,8 @@ MultiZonePlatform.prototype.readLocalWeather = function(){
  
     //end the request
     getReq.end();
-    getReq.on('cannot get weather data', function(err){
-        platform.log("Error: ", err);
+    getReq.on('error', function(err){
+        platform.log("cannot get weather data: ", err);
     }); 
 };
 
