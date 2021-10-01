@@ -382,12 +382,9 @@ MultiZonePlatform.prototype.readCPUTemperature = function(){
 };
 MultiZonePlatform.prototype.readLocalWeather = function(){
   if(!platform.accuweatherURL){return;}
-    // var options = {
-    //     host :  'rss.accuweather.com',
-    //     port : 80,
-    //     path : '/rss/liveweather_rss.asp?metric=0&locCode=US|44022',
-    //     method : 'GET'
-    // }
+    //     EXAMPLE
+    //     http://rss.accuweather.com/rss/liveweather_rss.asp?metric=0&locCode=US|44022'
+    //
  
     //making the http get call
     var getReq = http.request(platform.accuweatherURL, function(res) {
