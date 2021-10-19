@@ -1,6 +1,6 @@
 {
   "name": "homebridge-multizone-thermostat",
-  "version": "5.7.0",
+  "version": "5.4.1",
   "description": "A homebridge platform that adds multiple zone thermostats",
   "main": "index.js",
   "scripts": {
@@ -27,12 +27,8 @@
   },
   "homepage": "https://github.com/mcmspark/homebridge-multizone-thermostat#readme",
   "dependencies": {
-    "bme280-sensor": "^0.1.7",
-    "chart.js": "^2.7.3",
+    "chart.js": ">=2.9.4",
     "css-toggle-switch": "^4.1.0",
-    "jquery": "^3.6.0",
-    "mime": "^2.4.0",
-    "rpi-gpio": "^2.1.7",
-    "serialport": "^9.2.3"
+    "mime": "^2.4.0"
   }
 }
