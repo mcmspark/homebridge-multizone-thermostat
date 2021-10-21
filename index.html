@@ -6,9 +6,7 @@
 	<link rel="stylesheet" type="text/css" href="node_modules/css-toggle-switch/dist/toggle-switch.css">
 
 	<script src="node_modules/jquery/dist/jquery.min.js"></script>
-<!--
-	<script src="mockstatus.json"></script>
- -->
+	<!-- <script src="mockstatus.json"></script> -->
 	<script src="node_modules/chart.js/dist/chart.min.js"></script>
 	<script src="node_modules/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
@@ -241,13 +239,21 @@
             pressconfig = BuildChartConfig(pressconfig, statusData.sensorLog, minDate, maxDate, "deviceid", ['BM'], "", "press");
 
 
-			var ctx = document.getElementById('canvas').getContext('2d');
-			window.myLine = new Chart(ctx, fconfig);
-			var tempctx = document.getElementById('tempCanvas').getContext('2d');
-			window.myLine2 = new Chart(tempctx, tempconfig);
-			var pressctx = document.getElementById('pressCanvas').getContext('2d');
-			window.myLine3 = new Chart(pressctx, pressconfig);
-
+			if(window.myLine){
+				window.myLine.data=tempconfig.data;
+				window.myLine.draw();
+				window.myLine2.data=fconfig.data;
+				window.myLine2.draw();
+				window.myLine3.data=pressconfig.data;
+				window.myLine3.draw();
+			}else{
+				var ctx = document.getElementById('canvas').getContext('2d');
+				window.myLine = new Chart(ctx, fconfig);
+				var tempctx = document.getElementById('tempCanvas').getContext('2d');
+				window.myLine2 = new Chart(tempctx, tempconfig);
+				var pressctx = document.getElementById('pressCanvas').getContext('2d');
+				window.myLine3 = new Chart(pressctx, pressconfig);
+			}
 		}
 
 		function moveData() {
