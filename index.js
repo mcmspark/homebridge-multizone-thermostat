@@ -184,6 +184,21 @@ MultiZonePlatform.prototype.startUI=function() {
         this.setTemperature(z, HCState, setVal);
       }
     }
+    else if (request.url.indexOf("?") > 0) {
+      let params = new URLSearchParams(request.url.split("?")[1]);
+      let deviceid = params.get('deviceid');
+      if(deviceid){
+        var deviceData={};
+        params.forEach( (value, name, searchParams) => {
+          if(name != 'deviceid')deviceData[name]=value;
+        });
+        // eg /sensor?deviceid=bmr&temp=30.1&press=999.99&humid=45.1&batt=100.0
+        platform.updateSensorData(deviceid, deviceData);
+        response.end("UPDATED")
+      }else{
+        response.end("NO deviceid specified");
+      }  
+    }
     else
       this.returnFileContents(request.url, response);
   }.bind(this));

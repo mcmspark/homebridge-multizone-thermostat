@@ -7,10 +7,11 @@
 
 	<script src="node_modules/jquery/dist/jquery.min.js"></script>
 <!--
-	<script src="jquery.min.js"></script>
 	<script src="mockstatus.json"></script>
  -->
 	<script src="node_modules/chart.js/dist/chart.min.js"></script>
+	<script src="node_modules/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
 </head>
 
 <body>
@@ -146,7 +147,8 @@
 			var d=new Date();
 			var months=["Jan","Feb","March","April","May", "June","July","Aug","Sept","Oct","Nov", "Dec"];
 			var dayOfWeek=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
-			$("#dateTime").html('<p><span class="day">'+dayOfWeek[d.getDay()]+'</span>'+d.getDate()+'<span class="month">'+months[d.getMonth()]+'</span><span class="weather">'+dataCache.enviornment.weatherData.condition + " " + dataCache.enviornment.weatherData.temp+'</span></p>');
+			var weatherData = dataCache.enviornment ? dataCache.enviornment.weatherData.condition + " " + dataCache.enviornment.weatherData.temp : ""
+			$("#dateTime").html('<p><span class="day">'+dayOfWeek[d.getDay()]+'</span>'+d.getDate()+'<span class="month">'+months[d.getMonth()]+'</span><span class="weather">'+weatherData+'</span></p>');
 			//$("#data").text("OK - " + new Date().toString());
 			$("#main").html("");
 			if(simple)$("body").css("overflow", "hidden");
@@ -321,27 +323,19 @@
                 },
                 options: {
                     scales: {
-                        xAxes: [{
+                        x: {
                             type: 'time',
-                            time: {
-                                max: maxdate,
-                                min: mindate,
-                                tooltipFormat: 'll HH:mm'
-                            },
-                            scaleLabel: {
-                                display: true,
-                                labelString: 'Time'
-                            }
-                        }],
-                        yAxes: [{
+							display: true
+                        },
+                        y: {
                             position: 'left',
-                            display: true,
-                        }]
+                            display: true
+                        }
                     },
                 }
             };
             if (yAxisLabels) config.data.yLabels = yAxisLabels;
-            if (yAxisType) config.options.scales.yAxes[0].type = yAxisType;
+            if (yAxisType) config.options.scales.y.type = yAxisType;
             keyvalues.forEach(function(z){ config.data.datasets.push(
                 {
                     label: keylabel + z,
@@ -349,7 +343,7 @@
                     borderColor: window.chartColors[z],
                     fill: false,
                     pointRadius: 1,
-                    steppedLine: steppedLine || false,
+                    stepped: steppedLine || false,
                     data: linedata.filter( function(o){ return (o[datasetKey] == z);})
                 }
             )});
