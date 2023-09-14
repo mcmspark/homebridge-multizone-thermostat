@@ -2,7 +2,7 @@
 var http = require('http');
 var gpio = require('rpi-gpio');
 var BME280 = require('bme280-sensor');
-var SerialPort = require('serialport');
+const {SerialPort} = require('serialport');
 var fs = require('fs');
 var path = require('path');
 var mime=require('mime');
@@ -100,13 +100,13 @@ function MultiZonePlatform(log, config, api) {
   sensorLog=[];
   this.relayPins = config.relayPins || [25,24,23,22,27,17]
   this.zones = config.zones || zones;
+  this.sensors=[];
   this.sensorCheckMilliseconds = config.sensorCheckMilliseconds || 60000;
   this.temperatureDisplayUnits = config.temperatureDisplayUnits || 1;
   this.minOnOffTime = config.minOnOffTime || 300000;
   this.startDelay = config.startDelay || 10000;
   this.serverPort = config.serverPort || 3000;
-  this.serialPort = config.serialPort || '/dev/serial0';
-  this.serialCfg = config.serialCfg || { baudRate : 9600 };
+  this.serialCfg = config.serialCfg || {path : '/dev/serial0', baudRate : 9600 };
   this.hasBME280 = config.hasBME280;
   this.remoteBME280URL = config.remoteBME280URL;
   this.accuweatherURL = config.accuweatherURL;
@@ -182,7 +182,11 @@ MultiZonePlatform.prototype.startUI=function() {
         var HCState= platform.systemStateValue(parts[3]);
         var setVal = parts[4];
         this.setTemperature(z, HCState, setVal);
+        response.statusCode = 200;
+      }else{
+        response.statusCode = 500;
       }
+      response.end();
     }
     else if (request.url.indexOf("?") > 0) {
       let params = new URLSearchParams(request.url.split("?")[1]);
@@ -329,7 +333,7 @@ MultiZonePlatform.prototype.startSensorLoops=function(){
         }
       }
       ,this.sensorCheckMilliseconds);
-  var port = new SerialPort(this.serialPort, this.serialCfg);
+  var port = new SerialPort(this.serialCfg);
   platform.msgbuff="";
   port.on('error',function(err){
       platform.log('error',"cannot open serial port - " + err);
@@ -436,10 +440,16 @@ MultiZonePlatform.prototype.getZoneForDevice=function(deviceid){
 };
 MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   //platform.log("updateSensorData",deviceid);
+  var timestamp=new Date().toISOString();
+
   var logdata=JSON.parse(JSON.stringify(data));
   logdata.deviceid=deviceid;
-  logdata.timestamp=new Date().toISOString();
+  logdata.timestamp=timestamp;
   sensorLog.push(logdata);
+  data['timestamp']=timestamp;
+  for(var val in data){
+    this.sensors[deviceid][val]=data[val];
+  }
   var zone = this.getZoneForDevice(deviceid);
   if(!zone){
     this.addAccessory(deviceid);
@@ -456,10 +466,8 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   }
   //platform.log("zone", zone," device", deviceid);
   // write the data on the zones object
-    var timestamp=new Date().toString();
     for(var val in data){
       this.zones[zone].sensors[deviceid][val]=data[val];
-      this.zones[zone].sensors[deviceid]['timestamp']=timestamp;
     }
   //}else{
   //  zone="1";
@@ -670,7 +678,6 @@ MultiZonePlatform.prototype.configurationRequestHandler = function(context, requ
           "startDelay" : this.startDelay,
           "minOnOffTime" : this.minOnOffTime,
           "serverPort" : this.serverPort,
-          "serialPort" : this.serialPort,
           "serialCfg" : this.serialCfg
         });
     return;
