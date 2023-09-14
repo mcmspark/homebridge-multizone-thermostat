@@ -446,10 +446,6 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   logdata.deviceid=deviceid;
   logdata.timestamp=timestamp;
   sensorLog.push(logdata);
-  data['timestamp']=timestamp;
-  for(var val in data){
-    this.sensors[deviceid][val]=data[val];
-  }
   var zone = this.getZoneForDevice(deviceid);
   if(!zone){
     this.addAccessory(deviceid);
@@ -466,8 +462,10 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   }
   //platform.log("zone", zone," device", deviceid);
   // write the data on the zones object
+    var timestamp=new Date().toString();
     for(var val in data){
       this.zones[zone].sensors[deviceid][val]=data[val];
+      this.zones[zone].sensors[deviceid]['timestamp']=timestamp;
     }
   //}else{
   //  zone="1";
