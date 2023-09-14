@@ -447,10 +447,7 @@ MultiZonePlatform.prototype.updateSensorData = function(deviceid, data){
   logdata.timestamp=timestamp;
   sensorLog.push(logdata);
   data['timestamp']=timestamp;
-  for(var val in data){
-    platform.log("set sensordata for "+deviceid+"."+val+"="+data[val]);
-    this.sensors[deviceid][val]=data[val];
-  }
+  
   var zone = this.getZoneForDevice(deviceid);
   if(!zone){
     this.addAccessory(deviceid);
