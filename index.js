@@ -1,17 +1,48 @@
 'use strict';
 var http = require('http');
-const gpio = require('rpio');
+const gpio = require('array-gpio');
 var BME280 = require('bme280-sensor');
 const {SerialPort} = require('serialport');
 var fs = require('fs');
 var path = require('path');
 var mime=require('mime');
 
-gpio.init({mapping: 'gpio'});
 var OFF = false;
 var ON = true;
-var RELAY_ON = gpio.LOW; // inverse logic on relayboard
-var RELAY_OFF = gpio.HIGH;
+var RELAY_ON = OFF; // inverse logic on relayboard
+var RELAY_OFF = ON;
+
+const gpioArray = [
+  ["2", "3"],
+  ["3", "5"],
+  ["4", "7"],
+  ["17", "11"],
+  ["27", "13"],
+  ["22", "15"],
+  ["10", "19"],
+  ["9", "21"],
+  ["11", "23"],
+  ["5", "29"],
+  ["6", "31"],
+  ["13", "33"],
+  ["19", "35"],
+  ["26", "37"],
+  ["14", "8"],
+  ["15", "10"],
+  ["18", "12"],
+  ["23", "16"],
+  ["24", "18"],
+  ["25", "22"],
+  ["8", "24"],
+  ["7", "26"],
+  ["12", "32"],
+  ["16", "36"],
+  ["20", "38"],
+  ["21", "40"]
+];
+
+const gpioMap = new Map(gpioArray);
+
 
 var platform, Accessory, Service, Characteristic, AirPressure, UUIDGen, zones, furnaceLog, sensorLog;
 
@@ -211,14 +242,21 @@ MultiZonePlatform.prototype.startUI=function() {
 };
 MultiZonePlatform.prototype.setupGPIO=function() {
   try{
+        //translate relayPins from BCM to physical
       for (var pin in platform.relayPins) {
-        platform.log("setup pin", platform.relayPins[Number(pin)], "for relay", Number(pin)+1);
-        gpio.open(platform.relayPins[Number(pin)], gpio.OUTPUT, gpio.HIGH);
+        platform.relayPins[pin]=gpioMap.get(platform.relayPins[pin]);
       }
+      platform.log("setup pins", platform.relayPins, "for relay");
+      platform.relayControl = gpio.setOutput(platform.relayPins);
   }
   catch (err) {
-    platform.log('error ln207', JSON.stringify(err));
+    platform.log('error ln253', JSON.stringify(err));
   }
+};
+MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
+  //platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
+  if(val) platform.relayControl[ Number(pin) - 1 ].on;
+  else platform.relayControl[ Number(pin) - 1 ].off;
 };
 MultiZonePlatform.prototype.sendSNSMessage=function(message){
   var AWS = require('aws-sdk'); 
@@ -233,10 +271,6 @@ MultiZonePlatform.prototype.sendSNSMessage=function(message){
   sns.publish(params, function(err, data) {
     if (err) platform.log(err, err.stack);
   });
-};
-MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
-  //platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
-  gpio.write(platform.relayPins[ Number(pin) - 1 ],val);
 };
 MultiZonePlatform.prototype.updateGPIO=function(zone, HeatCoolMode ,val){
   try{
@@ -257,7 +291,7 @@ MultiZonePlatform.prototype.updateGPIO=function(zone, HeatCoolMode ,val){
       if(platform.zones[zone].relayPinFan)platform.writeGPIO(platform.zones[zone].relayPinFan,val?RELAY_ON:RELAY_OFF);
     }
   }catch(err){
-    platform.log('error ln600',JSON.stringify(err));
+    platform.log('error ln294',JSON.stringify(err));
   }
 };
 MultiZonePlatform.prototype.returnFileContents=function(url, response){
