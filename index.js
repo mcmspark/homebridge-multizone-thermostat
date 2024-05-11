@@ -247,7 +247,7 @@ MultiZonePlatform.prototype.setupGPIO=function() {
         platform.relayPins[pin]=gpioMap.get(platform.relayPins[pin]);
       }
       platform.log("setup pins", platform.relayPins, "for relay");
-      platform.relayControl = gpio.setOutput(platform.relayPins);
+      platform.relayControl = gpio.setOutput({pin:platform.relayPins});
   }
   catch (err) {
     platform.log('error ln253', JSON.stringify(err));
