@@ -1,18 +1,17 @@
 'use strict';
 var http = require('http');
-var gpio = require('rpi-gpio');
+const gpio = require('rpio');
 var BME280 = require('bme280-sensor');
 const {SerialPort} = require('serialport');
 var fs = require('fs');
 var path = require('path');
 var mime=require('mime');
 
-gpio.setMode(gpio.MODE_BCM);
-
+gpio.init({mapping: 'gpio'});
 var OFF = false;
 var ON = true;
-var RELAY_ON = OFF; // inverse logic on relayboard
-var RELAY_OFF = ON;
+var RELAY_ON = gpio.LOW; // inverse logic on relayboard
+var RELAY_OFF = gpio.HIGH;
 
 var platform, Accessory, Service, Characteristic, AirPressure, UUIDGen, zones, furnaceLog, sensorLog;
 
@@ -214,7 +213,7 @@ MultiZonePlatform.prototype.setupGPIO=function() {
   try{
       for (var pin in platform.relayPins) {
         platform.log("setup pin", platform.relayPins[Number(pin)], "for relay", Number(pin)+1);
-        gpio.setup(platform.relayPins[Number(pin)], gpio.DIR_HIGH);
+        gpio.open(platform.relayPins[Number(pin)], gpio.OUTPUT, gpio.HIGH);
       }
   }
   catch (err) {

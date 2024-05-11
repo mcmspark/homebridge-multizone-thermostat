@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+
+<head>
+	<link rel="stylesheet" type="text/css" href="index.css">
+	<link rel="stylesheet" type="text/css" href="node_modules/css-toggle-switch/dist/toggle-switch.css">
+	<script src="https://d3js.org/d3.v5.min.js"></script>
+	<script src="node_modules/jquery/dist/jquery.min.js"></script>
+	<script src="mockstatus.json"></script>
+	<!--
+	<script src="node_modules/chart.js/dist/chart.js"></script>
+	<script src="node_modules/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    -->
+</head>
+
+<body>
+<div class="header">
+	<div class="date" id="dateTime">
+		
+	</div>
+	<div class="crop">
+		<img id="weatherImage" onclick="location.reload()" src="https://www.theweather.com/wimages/foto15fa0abfd5f8c90c01e46ef929613e7e.png"/>
+	</div>
+	<div class="clock">
+	<svg xmlns="http://www.w3.org/2000/svg" version="1.1" style="width:123px;height:123px;background-color:#000000" viewBox="-1 -1 2 2"  stroke="none" fill="none">
+	<defs>
+		<circle id="hour-mark" cx="0" cy="-0.85" r="0.04"/>
+	</defs>
+	<g id="hour-marks" fill="#FFFFFF"/>
+	
+	<g id="hands" stroke="#FFFFFF" stroke-linecap="round" style="display:none">
+		<line id="hour-hand"   x1="0" y1="0" x2="0" y2="-0.50" stroke-width="0.11"/>
+		<line id="minute-hand" x1="0" y1="0" x2="0" y2="-0.75" stroke-width="0.07"/>
+	</g>
+	
+	
+	<script type="application/javascript">
+	
+	
+	function initialize() {
+		for (var i = 0; i < 12; i++) {
+			var elem = document.getElementById("hour-marks").appendChild(
+				document.createElementNS("http://www.w3.org/2000/svg", "use"));
+			elem.setAttribute("href", "#hour-mark");
+			rotateElem(elem, i / 12 * 360);
+		}
+		updateClock();
+		document.getElementById("hands").removeAttribute("style");
+	}
+	
+	function updateClock() {
+		var d = new Date();
+		rotateElem(document.getElementById("hour-hand"), 
+			(d.getHours() + d.getMinutes() / 60) / 12 * 360);
+		rotateElem(document.getElementById("minute-hand"),
+			d.getMinutes() / 60 * 360);
+		setTimeout(updateClock, 60000 - d.getTime() % 60000 + 100);
+	}
+	
+	function rotateElem(elem, degrees) {
+		elem.setAttribute("transform", "rotate(" + degrees + ")");
+	}
+	
+	initialize();
+	</script>
+	</svg>
+	</div>
+</div>
+	<div id="scrolableWrapper" class="scrolableWrapper">
+		<div id="main" class="main">
+			LOADING...
+		</div>
+		<div class="chart">
+		</div>
+		<div id="data" class="stat"></div>
+	</div>
+	<script>
+
+		var mock = window.mockdata != undefined;
+		var simple = window.location.href.indexOf("simple")>0;
+		var refreshTimer;
+		var dataCache = null;
+		var dataUpdate = {};
+		var sendUpdates = false;
+		var currentRefreshInterval = 0;
+		var temperatureDisplayUnits = "C";
+		// flow is
+		// click
+		// stop intervals
+		// update data cache and disply the update
+		// pend a put of the update with a 3 sec timer
+		// when timer fires
+		// post the update
+		// clear the post flag
+		// get fresh data
+		// reset the timer to 10 sec
+		function buttonClick(e) {
+			clearInterval(refreshTimer);
+			refreshTimer = null;
+			var zone = e.split('.')[0];
+			var action = e.split('.')[1];
+			var setPoint = 70;
+			var HCState = document.querySelector('input[name="hvacMode'+zone+'"]:checked').value;
+			//console.log(zone);
+			if (!dataUpdate[zone]) {
+				//console.log("reset dataUpdate[" + zone + "]");
+				//console.log(dataCache.zones[zone]);
+				dataUpdate[zone]={};
+				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
+				dataUpdate[zone].HeatingCoolingState =  HCState;
+			}
+			setPoint = Number(dataUpdate[zone].setPoint) + (action == '+' ? 1 : -1);
+			dataUpdate[zone].setPoint = setPoint;
+			dataCache.zones[zone].setPoint = unFmtTemp(setPoint);
+			//console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
+			sendUpdates = true;
+			displayData(dataCache.zones);
+			startInterval();
+		}
+		function turnOnOff(e){
+			var zone=e.id.split('.')[1];
+			var mode=e.id.split('.')[0].toUpperCase();
+			//console.log("zone "+ zone + "in" + mode + " mode");
+			if (!dataUpdate[zone]) {
+				//console.log("reset dataUpdate[" + zone + "]");
+				//console.log(dataCache.zones[zone]);
+				dataUpdate[zone]={};
+				dataUpdate[zone].setPoint = fmtTemp(dataCache.zones[zone].setPoint);
+			}
+			dataUpdate[zone].HeatingCoolingState = mode;
+			dataCache.zones[zone].HeatingCoolingState = mode;
+			//console.log("click " + zone + ", set to " + setPoint + " or " + dataCache.zones[zone].setPoint);
+			sendUpdates = true;
+			//displayData(dataCache.zones);
+			startInterval();
+		}
+		function fmtTemp(temp) {
+			return (temperatureDisplayUnits == "F" ? (temp * 9 / 5 + 32).toFixed(2) : temp);
+		}
+		function unFmtTemp(temp) {
+			return (temperatureDisplayUnits == "F" ? ((temp - 32) * 5 / 9).toFixed(2) : temp);
+		}
+		function displayData(data) {
+			var d=new Date();
+			var months=["Jan","Feb","March","April","May", "June","July","Aug","Sept","Oct","Nov", "Dec"];
+			var dayOfWeek=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"]
+			var weatherData = dataCache.enviornment ? dataCache.enviornment.weatherData.condition + " " + dataCache.enviornment.weatherData.temp : ""
+			$("#dateTime").html('<p><span class="day">'+dayOfWeek[d.getDay()]+'</span>'+d.getDate()+'<span class="month">'+months[d.getMonth()]+'</span><span class="weather">'+weatherData+'</span></p>');
+			//$("#data").text("OK - " + new Date().toString());
+			$("#main").html("");
+			if(simple)$("body").css("overflow", "hidden");
+			// keep all thermostats in the same mode?
+			var runmode='';
+			for (var zone in data) {
+				//var zone=data[z].name;
+				temperatureDisplayUnits = data[zone].temperatureDisplayUnits || temperatureDisplayUnits;
+				var currentTemp = fmtTemp(data[zone].currentTemp);
+				var setPoint = fmtTemp(data[zone].setPoint);
+				var running = data[zone].running;
+				runmode=data[zone].HeatingCoolingState;
+				var currentReads = "";
+				for (var r in data[zone].sensors) {
+					var age = new Date() - Date.parse(data[zone].sensors[r].timestamp);
+					currentReads += data[zone].sensors[r].location + " = " + fmtTemp(data[zone].sensors[r].temp) + (age > 130000 ? "*" : "") + "<br/>";
+				}
+				$("#main").append(
+					'<div id="' + zone + '" class="zone">' +
+					'<div class="h3">' + 
+					//'<div class="switch-toggle switch-3 switch-candy"><input id="cool" name="state-d" type="radio" checked=""><label for="cool" onclick="">Cool</label><input id="off" name="state-d" type="radio" checked="checked"><label for="off" onclick="">Off</label><input id="heat" name="state-d" type="radio"><label for="heat" onclick="">Heat</label>' +
+					//'<a></a></div>' +
+					//'<label class="switch">' +
+					//' <input id="checkbox.'+zone+'" type="checkbox" onclick="turnOnOff(this)" ' + (onOff?'checked':'') +'/>' +
+					//' <span class="slider round"></span>' +
+					//'</label>' + 
+					data[zone].name + '</div>' +
+					'<div class="tempRun' + running + '">' + Math.round(currentTemp) + '</div>' +
+					'<div class="ctrl">' +
+					'<button class="button" onclick="buttonClick(' + "'" + zone + ".+'" + ')">+</button>' +
+					'<div class="setpt"><span class="set">' + Math.round(setPoint) + '</span><span class="lbl">set</span></div>' +
+					'<button class="button" onclick="buttonClick(' + "'" + zone + ".-'" + ')">-</button>' +
+					'</div><div class="runmode">' +
+					'<fieldset style="padding:0px;">' +
+					'	<div class="switch-toggle">' +
+						(data[zone].relayPinCool ? 
+					'		<input id="cool.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="COOL" ' + (runmode=='COOL'?'checked':'') + '>' +
+					'		<label for="cool.'+zone+'" >Cool</label>' : '' ) +
+					'		<input id="off.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="OFF" ' + (runmode=='OFF'?'checked':'') + '>' +
+					'		<label for="off.'+zone+'" >Off</label>' +
+						(data[zone].relayPinHeat ?
+					'		<input id="heat.'+zone+'" name="hvacMode'+zone+'" type="radio" onchange="turnOnOff(this)" value="HEAT" ' + (runmode=='HEAT'?'checked':'') + '>' +
+					'		<label for="heat.'+zone+'" >Heat</label>' : '' ) +
+					'		<a></a>' +
+					'	</div>' +
+					'</fieldset></div>' +
+					'<div class="readings">' + currentReads + '</div>' +
+					'</div>');
+			}
+		}
+
+		function moveData() {
+			if (sendUpdates) {
+				sendUpdates = false;
+				for (var zone in dataUpdate) {
+					var setPoint = dataUpdate[zone].setPoint;
+					var HCState=dataUpdate[zone].HeatingCoolingState;
+					// need to push only changes
+					console.log("set zone=" + zone + " HCState=" + HCState + " temp=" + setPoint);
+					if (!mock) {
+						$.ajax({
+							type: 'PUT',
+							url: '/set/' + zone + '/' + HCState + '/' + unFmtTemp(setPoint),
+							error: function (err) {
+								$("#data").text("Error on PUT");
+								console.log(JSON.stringify(err));
+							}
+						});
+					}
+				}
+				dataUpdate = {};
+				startInterval();
+			}
+			else {
+				console.log("get");
+				if (!mock) {
+					$.ajax({
+						type: 'GET',
+						url: (simple?'/status?simple=1':'/status' )  ,
+						error: function (err) {
+							$("#data").text("Error on GET - " + new Date().toString());
+							console.log(JSON.stringify(err));
+						}
+					}).done(function (data) {
+						if (data) {
+							dataCache = data;
+							displayData(data.zones);
+							drawGraph(data);
+						}
+					});
+				} else {
+					if (refreshTimer) clearInterval(refreshTimer);
+					dataCache = window.mockdata;
+					displayData(dataCache.zones);
+					drawGraph(dataCache.sensorLog);
+				}
+				if (currentRefreshInterval < 30000) {
+					startInterval(30000);
+				}
+			}
+		}
+		
+		window.chartColors = {
+				red: 'rgb(255, 99, 132)',
+				orange: 'rgb(255, 159, 64)',
+				yellow: 'rgb(255, 205, 86)',
+				green: 'rgb(75, 192, 192)',
+				blue: 'rgb(54, 162, 235)',
+				purple: 'rgb(153, 102, 255)',
+				grey: 'rgb(201, 203, 207)',
+				AA: 'rgb(255, 99, 132)',
+				AB: 'rgb(255, 159, 64)',
+				AC: 'rgb(255, 205, 86)',
+				AD: 'rgb(75, 192, 192)',
+				AE: 'rgb(54, 162, 235)',
+				AF: 'rgb(153, 102, 255)',
+				AH: 'rgb(201, 203, 207)',
+				'1': 'rgb(255, 99, 132)',
+				'2': 'rgb(255, 159, 64)',
+				'3': 'rgb(75, 192, 192)',
+				'4': 'rgb(54, 162, 235)',
+				'5': 'rgb(153, 102, 255)',
+				'6': 'rgb(201, 203, 207)',
+				BM: 'rgb(255, 99, 132)'
+			};
+		// begin D3 Code
+		drawGraph=function(dat){
+			console.log(dat.length,dat[0],d3.timeParse("%Y-%m-%dT%H:%M:%S.%LZ")(dat[0].timestamp));
+			// set the dimensions and margins of the graph
+            var margin = { top: 10, right: 30, bottom: 30, left: 60 },
+                width = 460 - margin.left - margin.right,
+                height = 400 - margin.top - margin.bottom;
+
+            // append the svg object to the body of the page
+            var svg = d3.select("#my_dataviz")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform",
+                "translate(" + margin.left + "," + margin.top + ")");
+             
+            let data = [];
+            dat.forEach(function(d){data.push({ date: d3.timeParse("%Y-%m-%dT%H:%M:%S.%LZ")(d.timestamp), value: d["temp"] })});
+                
+            // Now I can use this dataset:
+                
+            //console.log(data[0]);
+            // Add X axis --> it is a date format
+            var x = d3.scaleTime()
+                .domain(d3.extent(data, function (d) { return d.date; }))
+                .range([0, width]);
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x));
+
+            // Add Y axis
+            var y = d3.scaleLinear()
+                .domain([d3.min(data, function (d) { return +d.value; }), d3.max(data, function (d) { return +d.value; })])
+                .range([height, 0]);
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            // Add the line
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", window.chartColors.red)
+                .attr("stroke-width", 1.5)
+                .attr("d", d3.line()
+                     .x(function (d) { return x(d.date) })
+                    .y(function (d) { return y(d.value) })
+                );
+	        svg.append('text')
+                .attr('y', margin.top)
+                .attr('x', margin.left)
+                .attr('dy', '1.5em') // 1em equals exactly one unit of the currently specified text point size.
+                .style("text-anchor", 'middle')
+                .text("temp");
+        }
+	function reload(){
+		document.location.reload();
+	}
+	function startup(){
+		setTimeout(reload,900000);
+		startInterval(500);
+	}
+	function startInterval(timeout) {
+		if (refreshTimer) clearInterval(refreshTimer);
+		refreshTimer = null;
+		currentRefreshInterval = (Number(timeout) > 500) ? Number(timeout) : 500;
+		//console.log("Wait " + currentRefreshInterval);
+		refreshTimer = setInterval(moveData, currentRefreshInterval);
+	}
+	$(startup);
+	</script>
+</body>
+
+</html>
