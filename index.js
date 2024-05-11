@@ -1,11 +1,11 @@
 'use strict';
 var http = require('http');
-const gpio = require('array-gpio');
 var BME280 = require('bme280-sensor');
 const {SerialPort} = require('serialport');
 var fs = require('fs');
 var path = require('path');
 var mime=require('mime');
+const { spawn } = require('node:child_process');
 
 var OFF = false;
 var ON = true;
@@ -241,24 +241,32 @@ MultiZonePlatform.prototype.startUI=function() {
     platform.log("Server Listening on port", platform.serverPort);
   });
 };
-MultiZonePlatform.prototype.setupGPIO=function() {
-  try{
-        //translate relayPins from BCM to physical
-      for (var pin in platform.relayPins) {
-        platform.relayPins[pin]=gpioMap.get(platform.relayPins[pin]);
-      }
-      platform.log("setup pins", platform.relayPins, "for relay");
-      platform.relayControl = gpio.setOutput({pin:platform.relayPins});
-      platform.relayControl.forEach(relay => {relay.on()});  // clear all relays to OFF
-    }
-  catch (err) {
-    platform.log('error ln253', JSON.stringify(err));
-  }
-};
 MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
   platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
-  if(val) platform.relayControl[ Number(pin) - 1 ].on();
-  else platform.relayControl[ Number(pin) - 1 ].off();
+  const pinctrl = spawn('pinctrl', [pin, 'op', val ? 'dl' : 'dh']);
+
+        pinctrl.stdout.on('data', (data) => {
+          platform.log(`stdout: ${data}`);
+        });
+
+        pinctrl.stderr.on('data', (data) => {
+          platform.log(`stderr: ${data}`);
+        });
+
+        pinctrl.on('close', (code) => {
+          platform.log(`pinctrl exited with code ${code}`);
+        });
+}
+MultiZonePlatform.prototype.setupGPIO=function() {
+  try{
+      platform.log("setup pins", platform.relayPins, "for relay");
+      platform.relayPins.forEach(pin => { 
+        platform.writeGPIO(pin, RELAY_OFF);         
+      });
+    }
+  catch (err) {
+    platform.log('error ln269', JSON.stringify(err));
+  }
 };
 MultiZonePlatform.prototype.sendSNSMessage=function(message){
   var AWS = require('aws-sdk'); 
