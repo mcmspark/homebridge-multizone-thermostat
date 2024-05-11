@@ -13,33 +13,34 @@ var RELAY_ON = OFF; // inverse logic on relayboard
 var RELAY_OFF = ON;
 
 const gpioArray = [
-  ["2", "3"],
-  ["3", "5"],
-  ["4", "7"],
-  ["17", "11"],
-  ["27", "13"],
-  ["22", "15"],
-  ["10", "19"],
-  ["9", "21"],
-  ["11", "23"],
-  ["5", "29"],
-  ["6", "31"],
-  ["13", "33"],
-  ["19", "35"],
-  ["26", "37"],
-  ["14", "8"],
-  ["15", "10"],
-  ["18", "12"],
-  ["23", "16"],
-  ["24", "18"],
-  ["25", "22"],
-  ["8", "24"],
-  ["7", "26"],
-  ["12", "32"],
-  ["16", "36"],
-  ["20", "38"],
-  ["21", "40"]
+  [2, 3],
+  [3, 5],
+  [4, 7],
+  [17, 11],
+  [27, 13],
+  [22, 15],
+  [10, 19],
+  [9, 21],
+  [11, 23],
+  [5, 29],
+  [6, 31],
+  [13, 33],
+  [19, 35],
+  [26, 37],
+  [14, 8],
+  [15, 10],
+  [18, 12],
+  [23, 16],
+  [24, 18],
+  [25, 22],
+  [8, 24],
+  [7, 26],
+  [12, 32],
+  [16, 36],
+  [20, 38],
+  [21, 40]
 ];
+
 
 const gpioMap = new Map(gpioArray);
 
@@ -248,15 +249,16 @@ MultiZonePlatform.prototype.setupGPIO=function() {
       }
       platform.log("setup pins", platform.relayPins, "for relay");
       platform.relayControl = gpio.setOutput({pin:platform.relayPins});
-  }
+      platform.relayControl.forEach(relay => {relay.on()});  // clear all relays to OFF
+    }
   catch (err) {
     platform.log('error ln253', JSON.stringify(err));
   }
 };
 MultiZonePlatform.prototype.writeGPIO=function(pin ,val){
-  //platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
-  if(val) platform.relayControl[ Number(pin) - 1 ].on;
-  else platform.relayControl[ Number(pin) - 1 ].off;
+  platform.log("writeGPIO", platform.relayPins[ Number(pin) - 1 ], val, "relay", pin);
+  if(val) platform.relayControl[ Number(pin) - 1 ].on();
+  else platform.relayControl[ Number(pin) - 1 ].off();
 };
 MultiZonePlatform.prototype.sendSNSMessage=function(message){
   var AWS = require('aws-sdk'); 
